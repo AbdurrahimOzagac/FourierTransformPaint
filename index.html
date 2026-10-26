@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fourier Paint</title>
+  <meta name="description" content="Çizdiğiniz görüntünün 2B Fourier dönüşümünü anlık olarak görün; spektruma çizip ters dönüşümü izleyin.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1>Fourier Paint</h1>
+      <p>Soldaki görüntüye çizin, 2B Fourier spektrumu anlık güncellensin. Sağdaki spektruma çizin, ters dönüşüm solda görünsün.</p>
+    </div>
+    <div class="global">
+      <label>Çözünürlük
+        <select id="resolution">
+          <option value="128">128 × 128</option>
+          <option value="256" selected>256 × 256</option>
+          <option value="512">512 × 512</option>
+        </select>
+      </label>
+      <button id="undo" title="Geri al (Ctrl+Z)">↶ Geri al</button>
+      <button id="redo" title="Yinele (Ctrl+Y)">↷ Yinele</button>
+    </div>
+  </header>
+
+  <main class="panels">
+    <!-- Sol panel: uzamsal görüntü -->
+    <section class="panel" id="L">
+      <h2>Görüntü <span class="math">f(x, y)</span></h2>
+      <div class="canvas-wrap">
+        <canvas id="L-canvas"></canvas>
+        <div class="ring" id="L-ring"></div>
+      </div>
+      <div class="readout" id="L-readout">&nbsp;</div>
+
+      <div class="tools">
+        <div class="row">
+          <span class="lbl">Araç</span>
+          <div class="seg">
+            <label><input type="radio" name="L-tool" value="pen" checked><span>Kalem</span></label>
+            <label><input type="radio" name="L-tool" value="line"><span>Düz çizgi</span></label>
+          </div>
+        </div>
+        <div class="row">
+          <span class="lbl">Kalınlık</span>
+          <input type="range" id="L-size" min="1" max="64" value="8">
+          <input type="number" id="L-size-n" min="1" max="64" value="8">
+        </div>
+        <div class="row">
+          <span class="lbl">Renk</span>
+          <input type="range" id="L-value" class="gray" min="0" max="255" value="255">
+          <input type="number" id="L-value-n" min="0" max="255" value="255">
+          <span class="swatch" id="L-swatch"></span>
+          <button class="mini" data-set-value="0">Siyah</button>
+          <button class="mini" data-set-value="255">Beyaz</button>
+        </div>
+        <div class="row">
+          <span class="lbl">Doldur</span>
+          <button data-action="fill" data-v="0">Tümü siyah</button>
+          <button data-action="fill" data-v="255">Tümü beyaz</button>
+        </div>
+        <div class="row">
+          <span class="lbl">Çizgiler</span>
+          <button data-action="stripes" data-dir="h">☰ Yatay</button>
+          <button data-action="stripes" data-dir="v">▥ Dikey</button>
+          <span class="sub">aralık</span>
+          <input type="range" id="L-period" min="2" max="128" value="16">
+          <input type="number" id="L-period-n" min="2" max="128" value="16">
+        </div>
+        <p class="hint">Çizgiler kalem rengi ve kalınlığıyla çizilir. Düz çizgide Shift yatay/dikey/45°'ye kilitler.</p>
+        <div class="row">
+          <span class="lbl">Örnek</span>
+          <select id="L-example">
+            <option value="">Seçin…</option>
+            <option value="rect">Dikdörtgen</option>
+            <option value="circle">Daire</option>
+            <option value="impulse">Tek nokta (dürtü)</option>
+            <option value="sinh">Sinüs (yatay frekans)</option>
+            <option value="sinv">Sinüs (dikey frekans)</option>
+            <option value="sind">Sinüs (çapraz)</option>
+            <option value="checker">Dama tahtası</option>
+            <option value="gauss">Gauss</option>
+          </select>
+          <label class="file">Görüntü yükle<input type="file" id="L-file" accept="image/*"></label>
+        </div>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="L-normalize"> Görüntüyü min–max ile normalize et</label>
+          <button class="mini" data-action="png">PNG indir</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sağ panel: Fourier spektrumu -->
+    <section class="panel" id="R">
+      <h2>Spektrum <span class="math">log(1 + |F(u, v)|)</span></h2>
+      <div class="canvas-wrap">
+        <canvas id="R-canvas"></canvas>
+        <div class="ring" id="R-ring"></div>
+      </div>
+      <div class="readout" id="R-readout">&nbsp;</div>
+
+      <div class="tools">
+        <div class="row">
+          <span class="lbl">Araç</span>
+          <div class="seg">
+            <label><input type="radio" name="R-tool" value="pen" checked><span>Kalem</span></label>
+            <label><input type="radio" name="R-tool" value="line"><span>Düz çizgi</span></label>
+          </div>
+        </div>
+        <div class="row">
+          <span class="lbl">Kalınlık</span>
+          <input type="range" id="R-size" min="1" max="64" value="4">
+          <input type="number" id="R-size-n" min="1" max="64" value="4">
+        </div>
+        <div class="row">
+          <span class="lbl">Renk</span>
+          <input type="range" id="R-value" class="gray" min="0" max="255" value="0">
+          <input type="number" id="R-value-n" min="0" max="255" value="0">
+          <span class="swatch" id="R-swatch"></span>
+          <button class="mini" data-set-value="0">Siyah</button>
+          <button class="mini" data-set-value="255">Beyaz</button>
+        </div>
+        <div class="row">
+          <span class="lbl">Doldur</span>
+          <button data-action="fill" data-v="0">Tümü siyah</button>
+          <button data-action="fill" data-v="255">Tümü beyaz</button>
+        </div>
+        <div class="row">
+          <span class="lbl">Çizgiler</span>
+          <button data-action="stripes" data-dir="h">☰ Yatay</button>
+          <button data-action="stripes" data-dir="v">▥ Dikey</button>
+          <span class="sub">aralık</span>
+          <input type="range" id="R-period" min="2" max="128" value="16">
+          <input type="number" id="R-period-n" min="2" max="128" value="16">
+        </div>
+        <p class="hint">Spektruma çizim yalnızca genliği değiştirir, fazı korur. Simetrik nokta (−u, −v) otomatik çizilir, böylece ters dönüşüm gerçel kalır.</p>
+        <div class="row">
+          <span class="lbl">Filtre</span>
+          <select id="R-ftype">
+            <option value="ideal">İdeal</option>
+            <option value="gauss">Gauss</option>
+            <option value="butter">Butterworth (n=2)</option>
+          </select>
+          <select id="R-fmode">
+            <option value="lp">Alçak geçiren</option>
+            <option value="hp">Yüksek geçiren</option>
+          </select>
+          <span class="sub">D₀</span>
+          <input type="range" id="R-d0" min="1" max="128" value="30">
+          <input type="number" id="R-d0-n" min="1" max="128" value="30">
+          <button data-action="filter">Uygula</button>
+        </div>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="R-auto"> Otomatik kontrast (en büyük değer = 255)</label>
+          <button class="mini" data-action="png">PNG indir</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="notes">
+    <h3>Nasıl çalışır?</h3>
+    <ul>
+      <li>Sol panel <em>f(x, y)</em> gri seviye görüntüdür (0 siyah, 255 beyaz). Her değişiklikte 2B FFT hesaplanır.</li>
+      <li>Sağ panel, slaytlardaki gibi merkezlenmiş (DC ortada) genlik spektrumunu <em>log(1 + |F|)</em> ölçeğiyle gösterir. Varsayılan ölçek sabittir: 255, olası en büyük değer olan N²·255'e karşılık gelir.</li>
+      <li>Spektruma <em>g</em> değeriyle çizmek, o frekansın genliğini |F| = e<sup>g·L/255</sup> − 1 yapar (L: ölçek). Faz korunur; genliği sıfır olan noktada faz 0 alınır.</li>
+      <li>Ters dönüşümün sonucu 0–255 dışına çıkabilir; sol panel bu değerleri kırpar. Hepsini görmek için “normalize et” seçeneğini açın.</li>
+    </ul>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
