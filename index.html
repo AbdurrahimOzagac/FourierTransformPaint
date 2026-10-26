@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fourier Paint</title>
   <meta name="description" content="Çizdiğiniz görüntünün 2B Fourier dönüşümünü anlık olarak görün; spektruma çizip ters dönüşümü izleyin.">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <header class="top">
@@ -157,6 +157,13 @@
           <button data-action="filter">Uygula</button>
         </div>
         <div class="row">
+          <span class="lbl">Örnek</span>
+          <select id="R-example">
+            <option value="">Seçin…</option>
+          </select>
+          <a class="file" href="#gallery-spectrum-title">Galeri ↓</a>
+        </div>
+        <div class="row">
           <label class="check"><input type="checkbox" id="R-auto"> Otomatik kontrast (en büyük değer = 255)</label>
           <button class="mini" data-action="png">PNG indir</button>
         </div>
@@ -165,9 +172,12 @@
   </main>
 
   <section class="gallery-wrap" id="gallery-wrap">
-    <h2>Örnek galerisi</h2>
-    <p class="hint">Ders slaytlarındaki örneklere benzer sentetik görüntüler. Tıklayınca sol panele yüklenir.</p>
-    <div id="gallery"></div>
+    <h2>Görüntü örnekleri</h2>
+    <p class="hint">Ders slaytlarındaki örneklere benzer sentetik görüntüler. Tıklayınca sol panele yüklenir, spektrumu sağda hesaplanır.</p>
+    <div id="gallery-image"></div>
+    <h2 id="gallery-spectrum-title">Spektrum örnekleri</h2>
+    <p class="hint">Doğrudan tasarlanmış spektrumlar (küçük resimler spektrumu gösterir). Tıklayınca sağ panele yüklenir, ters dönüşümü solda görünür. Görüntü 0–255 aralığına sığsın diye ters dönüşüm doğrusal olarak ölçeklenir, bu yüzden spektrumun ortasında DC noktası da belirir.</p>
+    <div id="gallery-spectrum"></div>
   </section>
 
   <footer class="notes">
@@ -180,7 +190,7 @@
     </ul>
   </footer>
 
-  <script src="examples.js"></script>
-  <script src="app.js"></script>
+  <script src="examples.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

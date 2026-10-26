@@ -508,7 +508,20 @@
     const ex = EXAMPLES.find((e) => e.id === id);
     if (!ex) return;
     pushUndo();
-    s.set(ex.gen(N));
+    if (ex.kind === 'spectrum') {
+      // Tasarlanan spektrumun ters dönüşümünü 0–255'e doğrusal olarak ölçekle.
+      // Bu yalnızca spektrumu ölçekler ve DC'ye bir değer ekler; şekli korunur.
+      const F = ex.spec(N);
+      re.set(F.re);
+      im.set(F.im);
+      inverse();
+      let lo = Infinity, hi = -Infinity;
+      for (const v of s) { if (v < lo) lo = v; if (v > hi) hi = v; }
+      if (hi - lo < 1e-9) s.fill(128);
+      else for (let i = 0; i < s.length; i++) s[i] = ((s[i] - lo) * 255) / (hi - lo);
+    } else {
+      s.set(ex.gen(N));
+    }
     commit('spatial');
     const info = $('example-info');
     info.textContent = '';
@@ -518,16 +531,62 @@
     exampleCards.forEach((card, cid) => card.classList.toggle('active', cid === id));
   }
 
+  // Küçük resim: görüntü örneği için kendisi, spektrum örneği için merkezlenmiş
+  // log genlik spektrumu (otomatik kontrast).
+  function thumbnailURL(ex, n) {
+    const gray = new Float64Array(n * n);
+    if (ex.kind === 'spectrum') {
+      const F = ex.spec(n);
+      const h = n >> 1;
+      let mx = 0, lit = 0;
+      for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++) {
+          const k = ((y + h) % n) * n + ((x + h) % n);
+          const v = Math.log1p(Math.hypot(F.re[k], F.im[k]) * 1e4);
+          gray[y * n + x] = v;
+          if (v > mx) mx = v;
+          if (v > 0) lit++;
+        }
+      }
+      for (let i = 0; i < gray.length; i++) gray[i] = mx > 0 ? (gray[i] / mx) * 255 : 0;
+      // Seyrek spektrumlarda (birkaç nokta) noktalar görünsün diye kalınlaştır.
+      if (lit < n * n * 0.02) {
+        const src = gray.slice();
+        for (let y = 1; y < n - 1; y++) {
+          for (let x = 1; x < n - 1; x++) {
+            let m = 0;
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) m = Math.max(m, src[(y + dy) * n + x + dx]);
+            gray[y * n + x] = m;
+          }
+        }
+      }
+    } else {
+      gray.set(ex.gen(n));
+    }
+    const c = document.createElement('canvas');
+    c.width = c.height = n;
+    const ctx = c.getContext('2d');
+    const img = ctx.createImageData(n, n);
+    for (let i = 0, o = 0; i < gray.length; i++, o += 4) {
+      img.data[o] = img.data[o + 1] = img.data[o + 2] = gray[i];
+      img.data[o + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return c.toDataURL('image/png');
+  }
+
   function buildExamples() {
-    const select = $('L-example');
-    const gallery = $('gallery');
+    const selects = { image: $('L-example'), spectrum: $('R-example') };
+    const galleries = { image: $('gallery-image'), spectrum: $('gallery-spectrum') };
     const groups = new Map();
     for (const ex of EXAMPLES) {
-      if (!groups.has(ex.group)) groups.set(ex.group, []);
-      groups.get(ex.group).push(ex);
+      const key = (ex.kind || 'image') + '|' + ex.group;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(ex);
     }
     const thumbs = [];
-    for (const [name, list] of groups) {
+    for (const [key, list] of groups) {
+      const [kind, name] = key.split('|');
       const og = document.createElement('optgroup');
       og.label = name;
       const h = document.createElement('h3');
@@ -537,13 +596,15 @@
       for (const ex of list) {
         og.append(new Option(ex.name, ex.id));
         const card = document.createElement('button');
+        card.type = 'button';
         card.className = 'card';
         card.title = ex.info;
-        const c = document.createElement('canvas');
-        c.width = c.height = 128;
+        const img = document.createElement('img');
+        img.alt = '';
+        img.width = img.height = 128;
         const label = document.createElement('span');
         label.textContent = ex.name;
-        card.append(c, label);
+        card.append(img, label);
         card.addEventListener('click', () => {
           loadExample(ex.id);
           const top = $('L').getBoundingClientRect().top;
@@ -553,28 +614,26 @@
         });
         exampleCards.set(ex.id, card);
         grid.append(card);
-        thumbs.push([ex, c]);
+        thumbs.push([ex, img]);
       }
-      select.append(og);
-      gallery.append(h, grid);
+      selects[kind].append(og);
+      galleries[kind].append(h, grid);
     }
-    // Küçük resimleri sayfayı bloklamadan parça parça üret.
+    // Küçük resimleri sayfayı bloklamadan parça parça üret; biri hata verirse
+    // diğerleri etkilenmesin.
     const next = () => {
-      const item = thumbs.shift();
-      if (!item) return;
-      const [ex, c] = item;
-      const n = c.width;
-      const data = ex.gen(n);
-      const ctx = c.getContext('2d');
-      const img = ctx.createImageData(n, n);
-      for (let i = 0, o = 0; i < data.length; i++, o += 4) {
-        img.data[o] = img.data[o + 1] = img.data[o + 2] = data[i];
-        img.data[o + 3] = 255;
+      const t0 = performance.now();
+      while (thumbs.length && performance.now() - t0 < 30) {
+        const [ex, img] = thumbs.shift();
+        try {
+          img.src = thumbnailURL(ex, 128);
+        } catch (err) {
+          console.error('Küçük resim üretilemedi:', ex.id, err);
+        }
       }
-      ctx.putImageData(img, 0, 0);
-      setTimeout(next, 0);
+      if (thumbs.length) setTimeout(next, 0);
     };
-    setTimeout(next, 50);
+    setTimeout(next, 0);
   }
 
   function imageToSpatial(source, sw, sh) {
@@ -634,10 +693,12 @@
 
   $('L-normalize').addEventListener('change', (e) => { opts.normalize = e.target.checked; renderSpatial(); });
   $('R-auto').addEventListener('change', (e) => { opts.autoContrast = e.target.checked; renderSpectrum(); });
-  $('L-example').addEventListener('change', (e) => {
-    if (e.target.value) loadExample(e.target.value);
-    e.target.value = '';
-  });
+  for (const id of ['L-example', 'R-example']) {
+    $(id).addEventListener('change', (e) => {
+      if (e.target.value) loadExample(e.target.value);
+      e.target.value = '';
+    });
+  }
   $('L-file').addEventListener('change', (e) => {
     if (e.target.files[0]) loadFile(e.target.files[0]);
     e.target.value = '';

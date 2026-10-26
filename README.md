@@ -17,6 +17,7 @@ Tarayıcıda çalışan, 2B Fourier dönüşümünü etkileşimli olarak keşfet
   - **Periyodik desenler:** kare dalga ve harmonikleri, dama tahtası, ızgara, bölge plakası, tuğla duvar, metin
   - **Doku ve gürültü:** beyaz/bulanık gürültü, çakıl, ağaç kabuğu, uydu görüntüsü
   - **Test görüntüleri:** ideal alçak geçiren filtre test deseni, Shepp–Logan fantomu (MRI benzeri), periyodik gürültülü fantom, sütunlu bina
+- Sağ panel için 23 spektrum örneği (küçük resimler spektrumu gösterir): nokta çiftleri, harmonikler, disk (ideal alçak geçiren), kare, Gauss, halka, bant, çizgiler, rastgele fazlı 1/f ve 1/f² gürültü
 - Kendi görüntünüzü yükleme (gri seviyeye çevrilir)
 - Spektruma ideal / Gauss / Butterworth alçak veya yüksek geçiren filtre ve k-uzayı maskeleri (kare, yatay/dikey bant, halka) uygulama
 - 128 / 256 / 512 çözünürlük, geri al / yinele (Ctrl+Z / Ctrl+Y), PNG indirme

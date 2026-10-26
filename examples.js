@@ -279,7 +279,7 @@ window.FOURIER_EXAMPLES = (() => {
 
   const shape = (draw) => (N) => paint(N, (ctx) => { ctx.fillStyle = '#fff'; draw(ctx); });
 
-  return [
+  const images = [
     // ---------------------------------------------------------------- Temel
     { group: 'Temel şekiller', id: 'rect', name: 'Dikdörtgen',
       info: 'Dikdörtgenin spektrumu iki yönde sinc fonksiyonudur. Uzun kenar yönünde spektrum daha dardır.',
@@ -444,4 +444,155 @@ window.FOURIER_EXAMPLES = (() => {
       info: '“Masking out the fundamental and harmonics”: sütunlar spektrumda yatay eksende noktalar oluşturur. Bu noktaları silip sütunları kaldırmayı deneyin.',
       gen: columnsBuilding },
   ];
+
+  // ---------------------------------------------------------------------------
+  // Spektrum örnekleri: F(u, v) doğrudan tasarlanır. `spec(N)` merkezlenmemiş
+  // {re, im} döndürür. Konumlar 256 birimlik ölçektedir, her çözünürlükte
+  // spektrum aynı görünür.
+  // ---------------------------------------------------------------------------
+
+  // f(u, v, D, px): işaretli frekans (256 birim), D yarıçap, px bir pikselin
+  // 256 birimdeki boyu. Gerçel ve çift bir genlik döndürmelidir. (−1)^(u+v)
+  // çarpanı ters dönüşümün sonucunu görüntünün ortasına taşır.
+  function spectrum(N, f) {
+    const re = new Float64Array(N * N);
+    const im = new Float64Array(N * N);
+    const px = 256 / N;
+    for (let kv = 0; kv < N; kv++) {
+      const v = kv < N / 2 ? kv : kv - N;
+      for (let ku = 0; ku < N; ku++) {
+        const u = ku < N / 2 ? ku : ku - N;
+        let a = f(u * px, v * px, Math.hypot(u, v) * px, px);
+        if (a && (u + v) & 1) a = -a;
+        re[kv * N + ku] = a || 0;
+      }
+    }
+    return { re, im };
+  }
+
+  // Simetrik nokta çiftleri: [u, v, genlik] (256 birim). (−u, −v) eklenir.
+  function points(list) {
+    return (N) => {
+      const re = new Float64Array(N * N);
+      const im = new Float64Array(N * N);
+      const put = (u, v, a) => {
+        const ku = ((u % N) + N) % N, kv = ((v % N) + N) % N;
+        re[kv * N + ku] = a;
+      };
+      for (const [u0, v0, a] of list) {
+        const u = Math.round((u0 * N) / 256), v = Math.round((v0 * N) / 256);
+        put(u, v, a);
+        put(-u, -v, a);
+      }
+      return { re, im };
+    };
+  }
+
+  // Verilen genlik ve rastgele (eşlenik simetrik) faz.
+  function randomPhase(magFn, seed) {
+    return (N) => {
+      const rnd = rng(seed);
+      const re = new Float64Array(N * N);
+      const im = new Float64Array(N * N);
+      const px = 256 / N;
+      for (let kv = 0; kv < N; kv++) {
+        const v = kv < N / 2 ? kv : kv - N;
+        for (let ku = 0; ku < N; ku++) {
+          const k = kv * N + ku;
+          const km = ((N - kv) % N) * N + ((N - ku) % N);
+          if (km < k) continue;
+          const u = ku < N / 2 ? ku : ku - N;
+          const m = magFn(Math.hypot(u, v) * px);
+          const ph = km === k ? (rnd() < 0.5 ? 0 : Math.PI) : rnd() * TAU;
+          re[k] = m * Math.cos(ph); im[k] = m * Math.sin(ph);
+          re[km] = re[k]; im[km] = -im[k];
+        }
+      }
+      return { re, im };
+    };
+  }
+
+  const S = 'spectrum';
+  const spectra = [
+    // ------------------------------------------------------------ Noktalar
+    { kind: S, group: 'Spektrum: noktalar', id: 'sp-dc', name: 'Yalnızca DC',
+      info: 'Sadece merkezdeki nokta (DC): ters dönüşüm sabit gri bir görüntüdür.',
+      spec: points([[0, 0, 1]]) },
+    { kind: S, group: 'Spektrum: noktalar', id: 'sp-pair-h', name: 'Yatay nokta çifti',
+      info: 'u = ±8’de iki nokta: görüntüde dikey şeritler (yatay yönde değişen kosinüs).',
+      spec: points([[8, 0, 1]]) },
+    { kind: S, group: 'Spektrum: noktalar', id: 'sp-pair-v', name: 'Dikey nokta çifti',
+      info: 'v = ±8’de iki nokta: görüntüde yatay şeritler.',
+      spec: points([[0, 8, 1]]) },
+    { kind: S, group: 'Spektrum: noktalar', id: 'sp-pair-d', name: 'Çapraz nokta çifti',
+      info: '(±6, ±10) noktaları: şeritler noktaları birleştiren doğruya diktir.',
+      spec: points([[6, 10, 1]]) },
+    { kind: S, group: 'Spektrum: noktalar', id: 'sp-pair-far', name: 'Uzak nokta çifti',
+      info: 'Merkezden uzak noktalar yüksek frekansa karşılık gelir: ince şeritler.',
+      spec: points([[40, 0, 1]]) },
+    { kind: S, group: 'Spektrum: noktalar', id: 'sp-two-pairs', name: 'İki nokta çifti',
+      info: 'Yatay ve dikey kosinüslerin toplamı: yumurta kolisi deseni.',
+      spec: points([[8, 0, 1], [0, 8, 1]]) },
+    { kind: S, group: 'Spektrum: noktalar', id: 'sp-hex', name: 'Altıgen (3 çift)',
+      info: '60° aralıklı üç dalganın toplamı: altıgen bir desen oluşur.',
+      spec: points([[12, 0, 1], [6, 10, 1], [-6, 10, 1]]) },
+    { kind: S, group: 'Spektrum: noktalar', id: 'sp-harmonics', name: 'Tek harmonikler',
+      info: '1, 1/3, 1/5, 1/7, 1/9 genlikli tek harmonikler: Fourier serisiyle yaklaşık kare dalga.',
+      spec: points([[4, 0, 1], [12, 0, -1 / 3], [20, 0, 1 / 5], [28, 0, -1 / 7], [36, 0, 1 / 9]]) },
+    { kind: S, group: 'Spektrum: noktalar', id: 'sp-random-dots', name: 'Rastgele noktalar',
+      info: 'Rastgele konumlarda birkaç nokta çifti: farklı yön ve frekanslı dalgaların girişimi.',
+      spec: (N) => {
+        const rnd = rng(21);
+        const list = Array.from({ length: 8 }, () => [Math.round((rnd() - 0.5) * 60), Math.round(rnd() * 30), 0.5 + rnd()]);
+        return points(list)(N);
+      } },
+
+    // ------------------------------------------------------------ Şekiller
+    { kind: S, group: 'Spektrum: şekiller', id: 'sp-disk', name: 'Disk (ideal alçak geçiren)',
+      info: 'Frekansta keskin kenarlı disk, uzayda halkalı bir çekirdektir. İdeal filtredeki halkalanmanın (ringing) nedeni budur.',
+      spec: (N) => spectrum(N, (u, v, D) => (D <= 16 ? 1 : 0)) },
+    { kind: S, group: 'Spektrum: şekiller', id: 'sp-square', name: 'Kare',
+      info: 'Frekansta kare, uzayda 2B sinc fonksiyonudur (dikdörtgen ↔ sinc ikiliği).',
+      spec: (N) => spectrum(N, (u, v) => (Math.abs(u) <= 12 && Math.abs(v) <= 12 ? 1 : 0)) },
+    { kind: S, group: 'Spektrum: şekiller', id: 'sp-gauss', name: 'Gauss',
+      info: 'Gauss’un dönüşümü yine Gauss’tur. Frekansta geniş Gauss, uzayda dar bir lekedir.',
+      spec: (N) => spectrum(N, (u, v, D) => Math.exp(-(D * D) / (2 * 10 * 10))) },
+    { kind: S, group: 'Spektrum: şekiller', id: 'sp-ring', name: 'İnce halka',
+      info: 'Tek yarıçaplı halka: uzayda eş merkezli halkalar (Bessel J₀).',
+      spec: (N) => spectrum(N, (u, v, D, px) => (Math.abs(D - 20) < px / 2 ? 1 : 0)) },
+    { kind: S, group: 'Spektrum: şekiller', id: 'sp-annulus', name: 'Kalın halka (bant geçiren)',
+      info: 'Belirli bir frekans bandı: uzayda bant geçiren filtrenin çekirdeği.',
+      spec: (N) => spectrum(N, (u, v, D) => (D >= 12 && D <= 24 ? 1 : 0)) },
+    { kind: S, group: 'Spektrum: şekiller', id: 'sp-hband', name: 'Yatay bant',
+      info: 'Yatay bant (|v| küçük): uzayda dikey yönde uzamış bir çekirdek.',
+      spec: (N) => spectrum(N, (u, v) => (Math.abs(v) <= 4 && Math.abs(u) <= 64 ? 1 : 0)) },
+    { kind: S, group: 'Spektrum: şekiller', id: 'sp-hline', name: 'Yatay çizgi',
+      info: 'Spektrumda yatay çizgi (v = 0), görüntüde dikey bir çizgidir.',
+      spec: (N) => spectrum(N, (u, v) => (v === 0 ? 1 : 0)) },
+    { kind: S, group: 'Spektrum: şekiller', id: 'sp-vline', name: 'Dikey çizgi',
+      info: 'Spektrumda dikey çizgi (u = 0), görüntüde yatay bir çizgidir.',
+      spec: (N) => spectrum(N, (u) => (u === 0 ? 1 : 0)) },
+    { kind: S, group: 'Spektrum: şekiller', id: 'sp-cross', name: 'Artı',
+      info: 'İki çizginin toplamı: görüntüde de bir artı işareti.',
+      spec: (N) => spectrum(N, (u, v) => (u === 0 || v === 0 ? 1 : 0)) },
+    { kind: S, group: 'Spektrum: şekiller', id: 'sp-diag', name: 'Çapraz çizgi',
+      info: 'u = v doğrusu: görüntüde ona dik (−45°) bir çizgi.',
+      spec: (N) => spectrum(N, (u, v) => (u === v ? 1 : 0)) },
+
+    // ------------------------------------------------------------ Rastgele faz
+    { kind: S, group: 'Spektrum: rastgele faz', id: 'sp-white', name: 'Düz genlik',
+      info: 'Tüm frekanslarda eşit genlik ve rastgele faz: beyaz gürültü.',
+      spec: randomPhase((D) => (D > 0 ? 1 : 0), 31) },
+    { kind: S, group: 'Spektrum: rastgele faz', id: 'sp-pink', name: '1/f genlik',
+      info: 'Genlik frekansla 1/f azalır: doğal görüntülere benzeyen bulutsu doku.',
+      spec: randomPhase((D) => (D > 0 ? 1 / D : 0), 32) },
+    { kind: S, group: 'Spektrum: rastgele faz', id: 'sp-brown', name: '1/f² genlik',
+      info: 'Daha hızlı azalan genlik: daha yumuşak, büyük ölçekli yapılar.',
+      spec: randomPhase((D) => (D > 0 ? 1 / (D * D) : 0), 33) },
+    { kind: S, group: 'Spektrum: rastgele faz', id: 'sp-band-noise', name: 'Bant sınırlı gürültü',
+      info: 'Yalnızca bir halkadaki frekanslar: belirli boyutta lekelerden oluşan doku.',
+      spec: randomPhase((D) => (D >= 14 && D <= 18 ? 1 : 0), 34) },
+  ];
+
+  return [...images, ...spectra];
 })();

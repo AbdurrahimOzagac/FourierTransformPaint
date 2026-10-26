@@ -207,10 +207,11 @@ a.file { text-decoration: none; display: inline-block; }
   line-height: 1.3;
   background: var(--surface);
 }
-.card canvas {
+.card img {
   width: 100%;
-  aspect-ratio: 1;
+  height: auto;
   display: block;
+  image-rendering: pixelated;
   background: var(--canvas-frame);
   border-radius: 3px;
 }
