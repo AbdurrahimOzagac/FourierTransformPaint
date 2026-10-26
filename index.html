@@ -26,6 +26,8 @@
     </div>
   </header>
 
+  <p class="example-info" id="example-info"></p>
+
   <main class="panels">
     <!-- Sol panel: uzamsal görüntü -->
     <section class="panel" id="L">
@@ -75,15 +77,8 @@
           <span class="lbl">Örnek</span>
           <select id="L-example">
             <option value="">Seçin…</option>
-            <option value="rect">Dikdörtgen</option>
-            <option value="circle">Daire</option>
-            <option value="impulse">Tek nokta (dürtü)</option>
-            <option value="sinh">Sinüs (yatay frekans)</option>
-            <option value="sinv">Sinüs (dikey frekans)</option>
-            <option value="sind">Sinüs (çapraz)</option>
-            <option value="checker">Dama tahtası</option>
-            <option value="gauss">Gauss</option>
           </select>
+          <a class="file" href="#gallery-wrap">Galeri ↓</a>
           <label class="file">Görüntü yükle<input type="file" id="L-file" accept="image/*"></label>
         </div>
         <div class="row">
@@ -140,13 +135,21 @@
         <div class="row">
           <span class="lbl">Filtre</span>
           <select id="R-ftype">
-            <option value="ideal">İdeal</option>
-            <option value="gauss">Gauss</option>
-            <option value="butter">Butterworth (n=2)</option>
+            <optgroup label="Filtreler">
+              <option value="ideal">İdeal</option>
+              <option value="gauss">Gauss</option>
+              <option value="butter">Butterworth (n=2)</option>
+            </optgroup>
+            <optgroup label="Maskeler (k-uzayı)">
+              <option value="square">Kare (|u|, |v| ≤ D₀)</option>
+              <option value="hband">Yatay bant (|v| ≤ D₀)</option>
+              <option value="vband">Dikey bant (|u| ≤ D₀)</option>
+              <option value="ring">Halka (D₀ ≤ D ≤ 2D₀)</option>
+            </optgroup>
           </select>
           <select id="R-fmode">
-            <option value="lp">Alçak geçiren</option>
-            <option value="hp">Yüksek geçiren</option>
+            <option value="lp">İçini tut (alçak geçiren)</option>
+            <option value="hp">İçini sil (yüksek geçiren)</option>
           </select>
           <span class="sub">D₀</span>
           <input type="range" id="R-d0" min="1" max="128" value="30">
@@ -161,6 +164,12 @@
     </section>
   </main>
 
+  <section class="gallery-wrap" id="gallery-wrap">
+    <h2>Örnek galerisi</h2>
+    <p class="hint">Ders slaytlarındaki örneklere benzer sentetik görüntüler. Tıklayınca sol panele yüklenir.</p>
+    <div id="gallery"></div>
+  </section>
+
   <footer class="notes">
     <h3>Nasıl çalışır?</h3>
     <ul>
@@ -171,6 +180,7 @@
     </ul>
   </footer>
 
+  <script src="examples.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

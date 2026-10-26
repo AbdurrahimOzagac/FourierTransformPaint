@@ -484,9 +484,15 @@
         const u = ku < half ? ku : ku - N;
         const D = Math.sqrt(u * u + v * v);
         let H;
-        if (type === 'ideal') H = D <= D0 ? 1 : 0;
-        else if (type === 'gauss') H = Math.exp(-(D * D) / (2 * D0 * D0));
-        else H = 1 / (1 + Math.pow(D / D0, 4));
+        switch (type) {
+          case 'ideal': H = D <= D0 ? 1 : 0; break;
+          case 'gauss': H = Math.exp(-(D * D) / (2 * D0 * D0)); break;
+          case 'butter': H = 1 / (1 + Math.pow(D / D0, 4)); break;
+          case 'square': H = Math.abs(u) <= D0 && Math.abs(v) <= D0 ? 1 : 0; break;
+          case 'hband': H = Math.abs(v) <= D0 ? 1 : 0; break;
+          case 'vband': H = Math.abs(u) <= D0 ? 1 : 0; break;
+          case 'ring': H = D >= D0 && D <= 2 * D0 ? 1 : 0; break;
+        }
         if (hp) H = 1 - H;
         const k = kv * N + ku;
         re[k] *= H; im[k] *= H;
@@ -495,27 +501,80 @@
     commit('spectral');
   }
 
-  function loadExample(name) {
+  const EXAMPLES = window.FOURIER_EXAMPLES || [];
+  const exampleCards = new Map();
+
+  function loadExample(id) {
+    const ex = EXAMPLES.find((e) => e.id === id);
+    if (!ex) return;
     pushUndo();
-    const c = half;
-    for (let y = 0; y < N; y++) {
-      for (let x = 0; x < N; x++) {
-        const dx = x + 0.5 - c, dy = y + 0.5 - c;
-        let v = 0;
-        switch (name) {
-          case 'rect': v = Math.abs(dx) < N / 24 && Math.abs(dy) < N / 12 ? 255 : 0; break;
-          case 'circle': v = dx * dx + dy * dy <= (N / 8) ** 2 ? 255 : 0; break;
-          case 'impulse': v = x === c && y === c ? 255 : 0; break;
-          case 'sinh': v = 127.5 + 127.5 * Math.cos((2 * Math.PI * 8 * x) / N); break;
-          case 'sinv': v = 127.5 + 127.5 * Math.cos((2 * Math.PI * 8 * y) / N); break;
-          case 'sind': v = 127.5 + 127.5 * Math.cos((2 * Math.PI * (6 * x + 10 * y)) / N); break;
-          case 'checker': v = ((x >> 4) + (y >> 4)) & 1 ? 255 : 0; break;
-          case 'gauss': v = 255 * Math.exp(-(dx * dx + dy * dy) / (2 * (N / 32) ** 2)); break;
-        }
-        s[y * N + x] = v;
-      }
-    }
+    s.set(ex.gen(N));
     commit('spatial');
+    const info = $('example-info');
+    info.textContent = '';
+    const b = document.createElement('b');
+    b.textContent = ex.name + ': ';
+    info.append(b, ex.info);
+    exampleCards.forEach((card, cid) => card.classList.toggle('active', cid === id));
+  }
+
+  function buildExamples() {
+    const select = $('L-example');
+    const gallery = $('gallery');
+    const groups = new Map();
+    for (const ex of EXAMPLES) {
+      if (!groups.has(ex.group)) groups.set(ex.group, []);
+      groups.get(ex.group).push(ex);
+    }
+    const thumbs = [];
+    for (const [name, list] of groups) {
+      const og = document.createElement('optgroup');
+      og.label = name;
+      const h = document.createElement('h3');
+      h.textContent = name;
+      const grid = document.createElement('div');
+      grid.className = 'gallery-grid';
+      for (const ex of list) {
+        og.append(new Option(ex.name, ex.id));
+        const card = document.createElement('button');
+        card.className = 'card';
+        card.title = ex.info;
+        const c = document.createElement('canvas');
+        c.width = c.height = 128;
+        const label = document.createElement('span');
+        label.textContent = ex.name;
+        card.append(c, label);
+        card.addEventListener('click', () => {
+          loadExample(ex.id);
+          const top = $('L').getBoundingClientRect().top;
+          if (top < 0 || top > window.innerHeight * 0.5) {
+            $('example-info').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+        exampleCards.set(ex.id, card);
+        grid.append(card);
+        thumbs.push([ex, c]);
+      }
+      select.append(og);
+      gallery.append(h, grid);
+    }
+    // Küçük resimleri sayfayı bloklamadan parça parça üret.
+    const next = () => {
+      const item = thumbs.shift();
+      if (!item) return;
+      const [ex, c] = item;
+      const n = c.width;
+      const data = ex.gen(n);
+      const ctx = c.getContext('2d');
+      const img = ctx.createImageData(n, n);
+      for (let i = 0, o = 0; i < data.length; i++, o += 4) {
+        img.data[o] = img.data[o + 1] = img.data[o + 2] = data[i];
+        img.data[o + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      setTimeout(next, 0);
+    };
+    setTimeout(next, 50);
   }
 
   function imageToSpatial(source, sw, sh) {
@@ -593,6 +652,7 @@
     else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
   });
 
+  buildExamples();
   loadExample('rect');
   clearHistory();
 })();
