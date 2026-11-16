@@ -320,5 +320,35 @@ window.PYR_EXAMPLES = (() => {
     { id: 'orange', name: 'Portakal', gen: orange },
   ];
 
-  return { gray, color };
+  // Gerçek fotoğraflar (img/ klasöründe, 512×512). Kaynak ve lisanslar sayfa altında.
+  const photos = [
+    { id: 'ph-apple', file: 'img/apple.jpg', name: 'Elma (fotoğraf)', credit: 'OpenCV örnek verisi',
+      info: 'Burt & Adelson’un klasik harmanlama örneğindeki elma. Portakalla aynı konumda çekilmiştir.' },
+    { id: 'ph-orange', file: 'img/orange.jpg', name: 'Portakal (fotoğraf)', credit: 'OpenCV örnek verisi',
+      info: 'Klasik elma–portakal çiftinin portakalı: kabuktaki gözenekler ince ölçekli dokudur.' },
+    { id: 'ph-camera', file: 'img/camera.jpg', name: 'Kameraman', credit: 'scikit-image, CC0',
+      info: 'Görüntü işlemede klasik test görüntüsü: düz gökyüzü, ince tripod bacakları, çim dokusu.' },
+    { id: 'ph-chelsea', file: 'img/chelsea.jpg', name: 'Kedi (Chelsea)', credit: 'scikit-image, CC0',
+      info: 'Bıyıklar ve tüyler ince ölçekte, gözler ve kafa biçimi kaba ölçektedir.' },
+    { id: 'ph-coffee', file: 'img/coffee.jpg', name: 'Kahve fincanı', credit: 'scikit-image, CC0',
+      info: 'Elips biçimleri, pürüzsüz porselen ve kaba ahşap dokusu bir arada.' },
+    { id: 'ph-astronaut', file: 'img/astronaut.jpg', name: 'Astronot', credit: 'NASA, kamu malı',
+      info: 'Eileen Collins: yüz, bayrak çizgileri, kask ve arka plandaki mekik farklı ölçeklerde ayrıntı içerir.' },
+    { id: 'ph-rocket', file: 'img/rocket.jpg', name: 'Roket fırlatma', credit: 'SpaceX, CC0',
+      info: 'Gece fırlatma: karanlık arka plan üzerinde parlak, küçük ayrıntılar.' },
+    { id: 'ph-coins', file: 'img/coins.jpg', name: 'Sikkeler', credit: 'kamu malı',
+      info: 'Pompeii’den Yunan sikkeleri. Şablon eşleme için iyi: bir sikkeyi şablon olarak seçip benzerlerini arayın.' },
+    { id: 'ph-hubble', file: 'img/hubble.jpg', name: 'Hubble Derin Alan', credit: 'NASA/ESA, kamu malı',
+      info: 'Hubble eXtreme Deep Field: farklı boyutlarda galaksiler; çok ölçekli tespit için klasik örnek.' },
+    { id: 'ph-starry', file: 'img/starry-night.jpg', name: 'Yıldızlı Gece (Van Gogh)', credit: 'kamu malı',
+      info: 'Fırça darbeleri ince ölçekte, girdaplar ve servi ağacı kaba ölçekte.' },
+    { id: 'ph-brick', file: 'img/brick.jpg', name: 'Tuğla duvar', credit: 'scikit-image, CC0',
+      info: 'Düzenli doku: tuğla aralıkları belirli bir frekans bandında yoğunlaşır.' },
+    { id: 'ph-grass', file: 'img/grass.jpg', name: 'Çim', credit: 'scikit-image, CC0',
+      info: 'Yönlü, ince doku.' },
+    { id: 'ph-gravel', file: 'img/gravel.jpg', name: 'Çakıl', credit: 'scikit-image, CC0',
+      info: 'İzotropik doku: enerji her yönde benzer.' },
+  ];
+
+  return { gray, color, photos };
 })();

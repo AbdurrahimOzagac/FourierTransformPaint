@@ -264,3 +264,15 @@ pre.algo .hl { background: var(--accent-soft); color: var(--accent); border-radi
 .notes { color: var(--muted); font-size: 13px; padding-bottom: 32px; }
 .notes p { max-width: 900px; }
 .mats > div { max-width: 100%; min-width: 0; overflow-x: auto; }
+
+.bl-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 12px 0; }
+@media (max-width: 860px) { .bl-inputs { grid-template-columns: minmax(0, 1fr); } }
+.bl-in { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.bl-in select { max-width: 100%; min-width: 0; flex: 1 1 120px; }
+.row.tight { gap: 4px 8px; font-size: 13px; }
+.row.tight input[type="range"] { min-width: 60px; }
+.drop { position: relative; }
+.drop.over { outline: 3px dashed var(--accent); outline-offset: 2px; }
+canvas.maskpaint.on { cursor: crosshair; touch-action: none; }
+.status { color: var(--accent); }
+canvas { -webkit-user-select: none; user-select: none; }

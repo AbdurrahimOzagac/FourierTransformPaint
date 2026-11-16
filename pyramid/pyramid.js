@@ -256,29 +256,88 @@
   // ===========================================================================
   const S = {
     N: 256, K: 4, a: 0.375, lapGain: 'auto',
-    img: null, exId: 'zebra', upload: null,
+    img: null, src: { kind: 'gen', id: 'zebra' },
     G: [], L: [], drawing: false,
     tpl: null, // {x, y, w, h} 256 birim (seviye-b pikselleri)
   };
   const PYR = window.PYR_EXAMPLES;
+  const PHOTOS = PYR.photos;
   const FEX = (window.FOURIER_EXAMPLES || []).filter((e) => e.gen);
   const allGray = [...PYR.gray, ...FEX];
   const maxK = () => Math.min(7, Math.log2(S.N) - 1);
 
-  function loadExample(id) {
+  // Fotoğraflar: tembel yükleme + önbellek
+  const photoCache = new Map();
+  function photoPromise(id) {
+    const ph = PHOTOS.find((p) => p.id === id);
+    if (!ph) return Promise.reject(new Error('yok: ' + id));
+    let e = photoCache.get(id);
+    if (!e) {
+      e = { img: null };
+      e.promise = new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => { e.img = im; res(im); };
+        im.onerror = () => rej(new Error('yüklenemedi: ' + ph.file));
+        im.src = ph.file;
+      });
+      photoCache.set(id, e);
+    }
+    return e.promise;
+  }
+  const photoNow = (id) => (photoCache.get(id) || {}).img || null;
+  const TAINT_MSG = 'Fotoğraflar okunamadı: sayfa dosyadan (file://) açılmış. GitHub Pages üzerinden ya da yerelde <code>python3 -m http.server</code> ile açın.';
+  function safeChannels(image, N, gray, tf) {
+    try { return imageToChannels(image, N, gray, tf); }
+    catch (err) {
+      $('ex-info').innerHTML = TAINT_MSG;
+      $('bl-msg').innerHTML = TAINT_MSG;
+      return null;
+    }
+  }
+
+  // Ana görüntüyü seç (sentetik ya da fotoğraf). Başarılıysa true döner.
+  async function setMain(id) {
+    if (id.startsWith('ph-')) {
+      const ph = PHOTOS.find((p) => p.id === id);
+      S.src = { kind: 'photo', id };
+      $('ex-info').innerHTML = `<span class="status">${ph.name} yükleniyor…</span>`;
+      let im;
+      try { im = await photoPromise(id); } catch (err) { $('ex-info').textContent = err.message; return false; }
+      if (S.src.id !== id) return false;
+      const ch = safeChannels(im, S.N, true);
+      if (!ch) return false;
+      S.img = fromCh(S.N, S.N, ch);
+      $('g-example').value = id;
+      $('ex-info').innerHTML = `<b>${ph.name}.</b> ${ph.info} <span class="sub">(Kaynak: ${ph.credit}; gri seviyeye çevrildi.)</span>`;
+      return true;
+    }
     const ex = allGray.find((e) => e.id === id) || PYR.gray[0];
-    S.exId = ex.id; S.upload = null;
+    S.src = { kind: 'gen', id: ex.id };
     S.img = fromCh(S.N, S.N, [Float32Array.from(ex.gen(S.N))]);
     $('g-example').value = ex.id;
     $('ex-info').innerHTML = `<b>${ex.name}.</b> ${ex.info || ''}`;
+    return true;
   }
-  function imageToChannels(image, N, gray) {
+  function selectMain(id) { return setMain(id).then((ok) => { if (ok) fullRefresh(); }); }
+  async function reloadImage() {
+    if (S.src.kind === 'upload') {
+      const ch = safeChannels(S.src.img, S.N, true);
+      if (ch) S.img = fromCh(S.N, S.N, ch);
+      $('g-example').value = 'upload';
+      return true;
+    }
+    return setMain(S.src.id);
+  }
+  function imageToChannels(image, N, gray, tf) {
     const c = document.createElement('canvas');
     c.width = c.height = N;
     const ctx = c.getContext('2d');
-    const s = Math.max(N / image.width, N / image.height);
+    const t = tf || { s: 1, dx: 0, dy: 0 };
+    if (tf) { ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, N, N); }
+    const s = Math.max(N / image.width, N / image.height) * t.s;
     const w = image.width * s, h = image.height * s;
-    ctx.drawImage(image, (N - w) / 2, (N - h) / 2, w, h);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(image, (N - w) / 2 + t.dx * N, (N - h) / 2 + t.dy * N, w, h);
     const d = ctx.getImageData(0, 0, N, N).data;
     const ch = [0, 1, 2].map(() => new Float32Array(N * N));
     for (let i = 0, o = 0; i < N * N; i++, o += 4) { ch[0][i] = d[o]; ch[1][i] = d[o + 1]; ch[2][i] = d[o + 2]; }
@@ -1180,40 +1239,91 @@
   // ===========================================================================
   // 10. Harmanlama
   // ===========================================================================
-  const BL = { A: 'apple', B: 'orange', upA: null, upB: null };
-  function blendSource(which) {
+  const BL = { up: { A: null, B: null }, mask: null, maskN: 0, lastGeo: 'v', painting: false };
+  const genCanvasCache = new Map();
+  function sourceDrawable(which) {
     const v = $(which === 'A' ? 'bl-a' : 'bl-b').value;
     const N = S.N;
-    if (v === 'upload') {
-      const im = which === 'A' ? BL.upA : BL.upB;
-      if (im) return fromCh(N, N, imageToChannels(im, N, false));
+    if (v === 'upload') return BL.up[which];
+    if (v === 'main') return offscreen(S.img);
+    if (v.startsWith('ph-')) {
+      const im = photoNow(v);
+      if (!im) photoPromise(v).then(() => renderBlend()).catch((e) => { $('bl-msg').textContent = e.message; });
+      return im;
     }
-    if (v === 'main') return fromCh(N, N, [S.img.c[0], S.img.c[0], S.img.c[0]]);
-    const ex = PYR.color.find((e) => e.id === v) || PYR.color[0];
-    return fromCh(N, N, ex.gen(N));
+    const key = v + '@' + N;
+    if (!genCanvasCache.has(key)) {
+      const ex = PYR.color.find((e) => e.id === v) || PYR.color[0];
+      genCanvasCache.set(key, offscreen(fromCh(N, N, ex.gen(N))));
+    }
+    return genCanvasCache.get(key);
   }
-  function blendMask() {
-    const N = S.N, m = mk(N, N, 1), t = $('bl-mask').value, d = m.c[0];
+  function blendSource(which) {
+    const d = sourceDrawable(which);
+    if (!d) return null;
+    const tf = which === 'B' ? { s: +$('bl-bs').value, dx: +$('bl-bx').value, dy: +$('bl-by').value } : null;
+    const ch = safeChannels(d, S.N, false, tf && (tf.s !== 1 || tf.dx || tf.dy) ? tf : null);
+    return ch && fromCh(S.N, S.N, ch);
+  }
+  function geoMask(N, t) {
+    const d = new Float32Array(N * N);
+    const cx = +$('bl-cx').value, cy = +$('bl-cy').value, cr = +$('bl-cr').value;
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const X = (x + 0.5) / N, Y = (y + 0.5) / N;
       let v;
       if (t === 'v') v = X < 0.5;
       else if (t === 'h') v = Y < 0.5;
-      else if (t === 'c') v = Math.hypot(X - 0.5, Y - 0.55) < 0.28;
+      else if (t === 'c') v = Math.hypot(X - cx, Y - cy) < cr;
       else v = X + Y < 1;
       d[y * N + x] = v ? 1 : 0;
     }
-    return m;
+    return d;
+  }
+  function ensureMask() {
+    const N = S.N;
+    if (BL.mask && BL.maskN === N) return;
+    if (BL.mask) { // en yakın komşu ile yeniden örnekle
+      const o = BL.maskN, src = BL.mask, d = new Float32Array(N * N);
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) d[y * N + x] = src[Math.floor(y * o / N) * o + Math.floor(x * o / N)];
+      BL.mask = d;
+    } else BL.mask = geoMask(N, BL.lastGeo);
+    BL.maskN = N;
+  }
+  function blendMask() {
+    const t = $('bl-mask').value;
+    if (t === 'draw' || t === 'upload') { ensureMask(); return fromCh(S.N, S.N, [BL.mask]); }
+    return fromCh(S.N, S.N, [geoMask(S.N, t)]);
+  }
+  function updateMaskUI() {
+    const t = $('bl-mask').value;
+    $('bl-circle').style.display = t === 'c' ? '' : 'none';
+    $('bl-brush').style.display = t === 'draw' ? '' : 'none';
+    $('bl-M').classList.toggle('on', t === 'draw');
+  }
+  function placeholder(canvas, text) {
+    canvas.width = canvas.height = S.N;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#2a2a2a'; ctx.fillRect(0, 0, S.N, S.N);
+    ctx.fillStyle = '#bbb'; ctx.font = `${S.N / 16}px system-ui, sans-serif`; ctx.textAlign = 'center';
+    ctx.fillText(text, S.N / 2, S.N / 2);
   }
   let blendCache = null;
-  function renderBlend() {
+  function renderBlend(withTable = true) {
     W = kernel(S.a);
     const N = S.N;
     const Kb = Math.min(+$('bl-levels').value, Math.log2(N) - 1);
     const A = blendSource('A'), B = blendSource('B'), M = blendMask();
-    render($('bl-A'), A); render($('bl-B'), B); render($('bl-M'), M, 'scale', { k: 255 });
-    const cut = binop(binop(A, M, (a, m) => a * m), binop(B, M, (b, m) => b * (1 - m)), (p, q) => p + q);
-    render($('bl-cut'), cut);
+    updateMaskUI();
+    render($('bl-M'), M, 'scale', { k: 255 });
+    if (!A) placeholder($('bl-A'), $('bl-a').value === 'upload' ? 'Görsel yükleyin' : 'Yükleniyor…'); else render($('bl-A'), A);
+    if (!B) placeholder($('bl-B'), $('bl-b').value === 'upload' ? 'Görsel yükleyin' : 'Yükleniyor…'); else render($('bl-B'), B);
+    if (!A || !B) return;
+    const mix = (m) => binop(binop(A, m, (a, w) => a * w), binop(B, m, (b, w) => b * (1 - w)), (p, q) => p + q);
+    render($('bl-cut'), mix(M));
+    const f = +$('bl-feather').value;
+    const Mf = f ? upTo(gaussPyr(M, f)[f], N) : M;
+    render($('bl-feath'), mix(Mf));
+    $('bl-feath-cap').innerHTML = `<b>2. Tek Gauss ile yumuşak geçiş</b> (maske ${f ? `↑G<sub>${f}</sub>, geçiş ≈ ${(2 ** f) * 2} px` : 'yumuşatılmadı'}): dar geçişte dikiş, geniş geçişte hayalet (iki görüntü üst üste) oluşur.`;
     const GA = gaussPyr(A, Kb), GB = gaussPyr(B, Kb), GM = gaussPyr(M, Kb);
     const LA = lapPyr(GA), LB = lapPyr(GB);
     const pa = [], pb = [], LS = [];
@@ -1222,10 +1332,49 @@
       const b = binop(LB[l], GM[l], (v, m) => v * (1 - m));
       pa.push(a); pb.push(b); LS.push(add(a, b));
     }
-    const out = collapse(LS);
-    render($('bl-out'), out);
+    render($('bl-out'), collapse(LS));
     blendCache = { pa, pb, LS, GM, Kb };
-    renderBlendTable();
+    if (withTable) renderBlendTable();
+  }
+  const BLEND_PRESETS = {
+    'apple-orange': { A: 'ph-apple', B: 'ph-orange', mask: 'v', levels: 6 },
+    'coffee-hubble': { A: 'ph-hubble', B: 'ph-coffee', mask: 'c', cx: 0.47, cy: 0.38, cr: 0.145, levels: 4 },
+    'starry-cat': { A: 'ph-starry', B: 'ph-chelsea', mask: 'h', levels: 6 },
+    'astro-starry': { A: 'ph-astronaut', B: 'ph-starry', mask: 'c', cx: 0.4, cy: 0.3, cr: 0.2, levels: 5 },
+    'brick-grass': { A: 'ph-brick', B: 'ph-grass', mask: 'd', levels: 6 },
+  };
+  function applyBlendPreset(name) {
+    const p = BLEND_PRESETS[name];
+    $('bl-a').value = p.A; $('bl-b').value = p.B; $('bl-mask').value = p.mask;
+    if (p.mask !== 'draw' && p.mask !== 'upload') BL.lastGeo = p.mask;
+    if (p.cx !== undefined) { $('bl-cx').value = p.cx; $('bl-cy').value = p.cy; $('bl-cr').value = p.cr; }
+    $('bl-levels').value = Math.min(p.levels, maxK()); $('bl-levels-o').textContent = $('bl-levels').value;
+    $('bl-bs').value = 1; $('bl-bx').value = 0; $('bl-by').value = 0; $('bl-bs-o').textContent = '1.00';
+    Promise.all([p.A, p.B].map(photoPromise)).then(() => renderBlend()).catch(() => {});
+    renderBlend();
+  }
+  function paintMask(e, last) {
+    const c = $('bl-M');
+    const [x, y] = canvasPos(c, e);
+    const N = S.N, r = +$('bl-bsize').value * N / 512;
+    const v = +document.querySelector('input[name="bl-bv"]:checked').value;
+    const [ax, ay] = last || [x, y];
+    const steps = Math.max(1, Math.ceil(Math.hypot(x - ax, y - ay) / Math.max(1, r / 2)));
+    for (let s = 0; s <= steps; s++) {
+      const cx = ax + (x - ax) * s / steps, cy = ay + (y - ay) * s / steps;
+      for (let py = Math.max(0, Math.floor(cy - r)); py <= Math.min(N - 1, Math.ceil(cy + r)); py++) {
+        for (let px = Math.max(0, Math.floor(cx - r)); px <= Math.min(N - 1, Math.ceil(cx + r)); px++) {
+          if ((px + 0.5 - cx) ** 2 + (py + 0.5 - cy) ** 2 <= r * r) BL.mask[py * N + px] = v;
+        }
+      }
+    }
+    return [x, y];
+  }
+  let blendRaf = false;
+  function blendSoon(table) {
+    if (blendRaf) return;
+    blendRaf = true;
+    requestAnimationFrame(() => { blendRaf = false; renderBlend(table); });
   }
   function renderBlendTable() {
     if (!blendCache) return;
@@ -1268,49 +1417,79 @@
       if (!groups.has(e.group)) groups.set(e.group, []);
       groups.get(e.group).push(e);
     }
+    let first = true;
     for (const [g, items] of groups) {
       const og = document.createElement('optgroup');
       og.label = g === 'Piramit örnekleri' ? g : `Fourier Paint: ${g}`;
       for (const e of items) og.appendChild(new Option(e.name, e.id));
       sel.appendChild(og);
+      if (first) {
+        first = false;
+        const ph = document.createElement('optgroup');
+        ph.label = 'Gerçek fotoğraflar (gri seviyeye çevrilir)';
+        for (const p of PHOTOS) ph.appendChild(new Option(p.name, p.id));
+        sel.appendChild(ph);
+      }
     }
     sel.appendChild(new Option('Yüklenen görüntü', 'upload'));
     for (const id of ['bl-a', 'bl-b']) {
       const s = $(id);
-      for (const e of PYR.color) s.appendChild(new Option(e.name, e.id));
-      s.appendChild(new Option('Ana görüntü (gri)', 'main'));
-      s.appendChild(new Option('Yüklenen görüntü', 'upload'));
+      const og = document.createElement('optgroup');
+      og.label = 'Fotoğraflar';
+      for (const p of PHOTOS) og.appendChild(new Option(p.name.replace(' (fotoğraf)', ''), p.id));
+      s.appendChild(og);
+      const og2 = document.createElement('optgroup');
+      og2.label = 'Diğer';
+      for (const e of PYR.color) og2.appendChild(new Option(e.name + ' (sentetik)', e.id));
+      og2.appendChild(new Option('Ana görüntü (gri)', 'main'));
+      og2.appendChild(new Option('Yüklenen görsel', 'upload'));
+      s.appendChild(og2);
     }
-    $('bl-a').value = 'apple';
-    $('bl-b').value = 'orange';
+    $('bl-a').value = 'ph-apple';
+    $('bl-b').value = 'ph-orange';
   }
-  function reloadImage() {
-    if (S.upload) {
-      S.img = fromCh(S.N, S.N, imageToChannels(S.upload, S.N, true));
-      $('g-example').value = 'upload';
-    } else loadExample(S.exId);
+  function fileToImage(file, cb) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => { cb(im); URL.revokeObjectURL(url); };
+    im.src = url;
+  }
+  function setMainUpload(im, name) {
+    S.src = { kind: 'upload', img: im };
+    $('ex-info').innerHTML = `<b>${name || 'Yüklenen görüntü'}.</b> Gri seviyeye çevrildi ve kare olacak biçimde ortadan kırpıldı.`;
+    reloadImage().then(fullRefresh);
+  }
+  function setBlendUpload(which, im) {
+    if (which === 'M') {
+      const ch = safeChannels(im, S.N, true);
+      if (!ch) return;
+      BL.mask = ch[0].map((v) => v / 255); BL.maskN = S.N;
+      $('bl-mask').value = 'upload';
+    } else {
+      BL.up[which] = im;
+      $(which === 'A' ? 'bl-a' : 'bl-b').value = 'upload';
+    }
+    renderBlend();
   }
 
   function wire() {
     $('g-example').onchange = (e) => {
-      if (e.target.value === 'upload') { if (!S.upload) $('g-file').click(); return; }
-      loadExample(e.target.value);
-      fullRefresh();
+      if (e.target.value === 'upload') {
+        if (S.src.kind !== 'upload') $('g-file').click();
+        return;
+      }
+      selectMain(e.target.value);
     };
-    $('g-file').onchange = (e) => readFile(e.target, (im) => {
-      S.upload = im;
-      $('ex-info').innerHTML = '<b>Yüklenen görüntü.</b> Gri seviyeye çevrildi ve kare olacak biçimde ortadan kırpıldı.';
-      reloadImage();
-      fullRefresh();
-    });
+    $('g-file').onchange = (e) => readFile(e.target, (im) => setMainUpload(im));
     $('g-size').onchange = (e) => {
       S.N = +e.target.value;
       if (S.tpl) {/* şablon 256 biriminde: değişmez */}
       $('g-levels').max = maxK();
       S.K = Math.min(S.K, maxK());
       $('bl-levels').max = maxK();
-      reloadImage();
-      fullRefresh();
+      $('bl-feather').max = maxK();
+      reloadImage().then(fullRefresh);
     };
     $('g-levels').oninput = (e) => {
       S.K = +e.target.value;
@@ -1335,7 +1514,7 @@
     document.querySelectorAll('[data-pen]').forEach((b) => {
       b.onclick = () => { $('pen-value').value = b.dataset.pen; $('pen-value-o').textContent = b.dataset.pen; };
     });
-    $('src-reset').onclick = () => { reloadImage(); fullRefresh(); };
+    $('src-reset').onclick = () => { reloadImage().then(fullRefresh); };
     $('src-clear').onclick = () => { S.img.c[0].fill(128); schedule(); setTimeout(() => { renderMatch(); renderSpectra(); }, 50); };
 
     $('tm-src').onchange = renderMatch;
@@ -1343,8 +1522,8 @@
     $('tm-thr').oninput = (e) => { $('tm-thr-o').textContent = (+e.target.value).toFixed(2); renderMatch(); };
 
     $('smp-factor').onchange = renderSampling;
-    $('smp-zone').onclick = () => { loadExample('zone'); fullRefresh(); };
-    $('full-noise').onclick = () => { loadExample('white-noise'); fullRefresh(); };
+    $('smp-zone').onclick = () => selectMain('zone');
+    $('full-noise').onclick = () => selectMain('white-noise');
     $('up-level').onchange = renderUp;
 
     $('app-q').oninput = () => { updateQLabel(); renderApps(); };
@@ -1361,13 +1540,82 @@
       };
     });
 
-    ['bl-a', 'bl-b', 'bl-mask'].forEach((id) => { $(id).onchange = (e) => {
-      if (e.target.value === 'upload' && !(id === 'bl-a' ? BL.upA : BL.upB)) { $(id + '-file').click(); return; }
+    ['bl-a', 'bl-b'].forEach((id) => { $(id).onchange = (e) => {
+      const w = id === 'bl-a' ? 'A' : 'B';
+      if (e.target.value === 'upload' && !BL.up[w]) { $(id + '-file').click(); return; }
       renderBlend();
     }; });
+    $('bl-mask').onchange = (e) => {
+      const t = e.target.value;
+      if (t === 'draw') {
+        // Çizime son geometrik maskeyle başla
+        if (!BL.mask || BL.maskN !== S.N) { BL.mask = geoMask(S.N, BL.lastGeo); BL.maskN = S.N; }
+      } else if (t === 'upload') {
+        $('bl-m-file').click();
+        if (!BL.mask) { BL.mask = geoMask(S.N, BL.lastGeo); BL.maskN = S.N; }
+      } else {
+        BL.lastGeo = t;
+        BL.mask = geoMask(S.N, t); BL.maskN = S.N;
+      }
+      renderBlend();
+    };
+    for (const id of ['bl-cx', 'bl-cy', 'bl-cr']) $(id).oninput = () => blendSoon(false);
+    for (const id of ['bl-cx', 'bl-cy', 'bl-cr']) $(id).onchange = () => renderBlend();
+    for (const id of ['bl-bs', 'bl-bx', 'bl-by']) {
+      $(id).oninput = () => { $('bl-bs-o').textContent = (+$('bl-bs').value).toFixed(2); blendSoon(false); };
+      $(id).onchange = () => renderBlend();
+    }
     $('bl-levels').oninput = (e) => { $('bl-levels-o').textContent = e.target.value; renderBlend(); };
-    $('bl-a-file').onchange = (e) => readFile(e.target, (im) => { BL.upA = im; $('bl-a').value = 'upload'; renderBlend(); });
-    $('bl-b-file').onchange = (e) => readFile(e.target, (im) => { BL.upB = im; $('bl-b').value = 'upload'; renderBlend(); });
+    $('bl-feather').oninput = (e) => { $('bl-feather-o').textContent = e.target.value; renderBlend(false); };
+    $('bl-a-file').onchange = (e) => readFile(e.target, (im) => setBlendUpload('A', im));
+    $('bl-b-file').onchange = (e) => readFile(e.target, (im) => setBlendUpload('B', im));
+    $('bl-m-file').onchange = (e) => readFile(e.target, (im) => setBlendUpload('M', im));
+    document.querySelectorAll('[data-blend]').forEach((b) => { b.onclick = () => applyBlendPreset(b.dataset.blend); });
+    $('bl-mclear').onclick = () => {
+      const v = +document.querySelector('input[name="bl-bv"]:checked').value;
+      ensureMask(); BL.mask.fill(1 - v); renderBlend();
+    };
+    $('bl-minv').onclick = () => { ensureMask(); BL.mask = BL.mask.map((v) => 1 - v); renderBlend(); };
+    $('bl-download').onclick = () => {
+      const a = document.createElement('a');
+      a.download = 'laplacian-harmanlama.png';
+      try { a.href = $('bl-out').toDataURL('image/png'); a.click(); } catch (err) { $('bl-msg').innerHTML = TAINT_MSG; }
+    };
+    {
+      const mc = $('bl-M');
+      let last = null;
+      mc.addEventListener('pointerdown', (e) => {
+        if ($('bl-mask').value !== 'draw') return;
+        e.preventDefault();
+        mc.setPointerCapture(e.pointerId);
+        ensureMask();
+        last = paintMask(e, null);
+        blendSoon(false);
+      });
+      mc.addEventListener('pointermove', (e) => {
+        if (!last) return;
+        last = paintMask(e, last);
+        blendSoon(false);
+      });
+      const end = () => { if (last) { last = null; renderBlend(); } };
+      mc.addEventListener('pointerup', end);
+      mc.addEventListener('pointercancel', end);
+    }
+    // Sürükle-bırak: A, B, maske ve ana görüntü
+    const dropTargets = [...document.querySelectorAll('[data-drop]'), srcCanvas.parentElement];
+    srcCanvas.parentElement.dataset.drop = 'main';
+    srcCanvas.parentElement.classList.add('drop');
+    for (const t of dropTargets) {
+      t.addEventListener('dragover', (e) => { e.preventDefault(); t.classList.add('over'); });
+      t.addEventListener('dragleave', () => t.classList.remove('over'));
+      t.addEventListener('drop', (e) => {
+        e.preventDefault();
+        t.classList.remove('over');
+        const f = e.dataTransfer.files && e.dataTransfer.files[0];
+        const w = t.dataset.drop;
+        fileToImage(f, (im) => (w === 'main' ? setMainUpload(im, f.name) : setBlendUpload(w, im)));
+      });
+    }
 
     // İçindekiler: görünen bölümü vurgula
     const links = [...document.querySelectorAll('.toc a')];
@@ -1383,7 +1631,8 @@
 
   fillExampleSelect();
   wire();
-  loadExample('zebra');
   S.tpl = { ...PYR.gray.find((e) => e.id === 'eyes').template };
-  fullRefresh();
+  setMain('zebra').then(fullRefresh);
+  // Harmanlamanın varsayılan fotoğraflarını önceden yükle
+  Promise.all(['ph-apple', 'ph-orange'].map(photoPromise)).then(() => renderBlend()).catch(() => {});
 })();

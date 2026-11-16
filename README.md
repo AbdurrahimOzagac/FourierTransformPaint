@@ -44,7 +44,9 @@ CMP473 Hafta 8 “Image Pyramids” slaytlarıyla eş zamanlı ilerleyen ikinci 
 7. **Frekans bantları** (slayt 37, 40–42): seviyeler tam çözünürlükte, her seviyenin Fourier spektrumu ve radyal genlik grafiği
 8. **Geri dönüşüm** (slayt 38–39): `x_k = L_k + F_k x_{k+1}` adım adım; hata ölçümü (mükemmel geri çatma)
 9. **Uygulamalar** (slayt 43): seviye kazançları, gürültü giderme, keskinleştirme, nicemleme ile sıkıştırma
-10. **Görüntü harmanlama** (slayt 44–47): elma/portakal, maske Gauss piramidi, seviye seviye katkılar
+10. **Görüntü harmanlama** (slayt 44–47): gerçek elma/portakal fotoğrafları ve hazır çiftler; A, B ve maske için görsel yükleme ya da sürükle-bırak; fırçayla maske çizme; B'yi ölçekleme/kaydırma; doğrudan kesme, tek Gauss ile yumuşatma ve Laplacian harmanlama karşılaştırması; seviye seviye katkılar; sonucu PNG indirme
+
+Hazır fotoğraflar (`pyramid/img/`, 512×512): elma ve portakal (OpenCV örnek verisi), kameraman, kedi, kahve, tuğla, çim, çakıl (scikit-image, CC0), astronot, Hubble Derin Alan, sikkeler (kamu malı), roket (SpaceX, CC0), Yıldızlı Gece (Van Gogh, kamu malı). Ana görüntü listesinde gri seviyeye çevrilerek de kullanılabilirler.
 
 Ortak ayarlar: görüntü seçimi ya da yükleme, 256/512 boyut, seviye sayısı K, Burt–Adelson çekirdek parametresi `a` (0.375 → [1 4 6 4 1]/16), Laplacian kontrastı. Giriş görüntüsüne çizim yapılabilir; tüm bölümler anında güncellenir.
 
@@ -56,4 +58,4 @@ Derleme adımı yoktur; uygulama statik dosyalardan oluşur (`index.html`, `styl
 2. **Source** olarak “Deploy from a branch” seçin, dalı (ör. `main`) ve `/ (root)` klasörünü seçip kaydedin.
 3. Birkaç dakika içinde uygulama `https://<kullanıcı-adı>.github.io/<depo-adı>/` adresinde yayında olur.
 
-Yerelde denemek için `index.html` dosyasını tarayıcıda açmanız yeterlidir.
+Yerelde denemek için `index.html` dosyasını tarayıcıda açmanız yeterlidir. Piramit sayfasındaki fotoğrafların piksellerine erişebilmek için ise sayfayı bir web sunucusundan açın (ör. depo klasöründe `python3 -m http.server`, sonra `http://localhost:8000/pyramid/`).

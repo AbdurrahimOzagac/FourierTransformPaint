@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Laplacian Piramidi</title>
   <meta name="description" content="CMP473 Hafta 8 slaytlarıyla eş zamanlı: Gauss ve Laplacian piramidi, geri dönüşüm ve görüntü harmanlama.">
-  <link rel="stylesheet" href="pyramid.css?v=2">
+  <link rel="stylesheet" href="pyramid.css?v=3">
 </head>
 <body>
   <header class="top">
@@ -398,29 +398,66 @@
         <li>Birleşik Laplacian piramidi: <span class="math">L(j) = G(j)·LA(j) + (1 − G(j))·LB(j)</span>.</li>
         <li><span class="math">L</span>’yi geri çat (collapse): harmanlanmış görüntü.</li>
       </ol>
+      <div class="row ctl presets">
+        <span class="lbl">Hazır çiftler</span>
+        <button data-blend="apple-orange">Elma + Portakal (klasik)</button>
+        <button data-blend="coffee-hubble">Kahve fincanında galaksi</button>
+        <button data-blend="starry-cat">Yıldızlı Gece + Kedi</button>
+        <button data-blend="astro-starry">Astronot + Yıldızlı Gece</button>
+        <button data-blend="brick-grass">Tuğla + Çim (doku)</button>
+      </div>
+      <div class="bl-inputs">
+        <div class="bl-in" id="bl-in-A">
+          <div class="row"><b>A</b> <select id="bl-a"></select>
+            <label class="file">Görsel yükle<input type="file" id="bl-a-file" accept="image/*"></label></div>
+          <div class="canvas-box drop" data-drop="A"><canvas id="bl-A"></canvas></div>
+          <p class="hint">Maskenin beyaz bölgesi. Görseli buraya sürükleyip bırakabilirsiniz.</p>
+        </div>
+        <div class="bl-in" id="bl-in-B">
+          <div class="row"><b>B</b> <select id="bl-b"></select>
+            <label class="file">Görsel yükle<input type="file" id="bl-b-file" accept="image/*"></label></div>
+          <div class="canvas-box drop" data-drop="B"><canvas id="bl-B"></canvas></div>
+          <div class="row tight"><span class="sub">B ölçek</span><input type="range" id="bl-bs" min="0.5" max="2" step="0.01" value="1"><output id="bl-bs-o">1.00</output></div>
+          <div class="row tight"><span class="sub">B kaydır x</span><input type="range" id="bl-bx" min="-0.5" max="0.5" step="0.005" value="0"><span class="sub">y</span><input type="range" id="bl-by" min="-0.5" max="0.5" step="0.005" value="0"></div>
+        </div>
+        <div class="bl-in">
+          <div class="row"><b>Maske</b>
+            <select id="bl-mask">
+              <option value="v" selected>Dikey: sol yarı A</option>
+              <option value="h">Yatay: üst yarı A</option>
+              <option value="c">Daire: içi A</option>
+              <option value="d">Çapraz</option>
+              <option value="draw">Fırçayla çiz</option>
+              <option value="upload">Maske görseli yükle</option>
+            </select>
+            <label class="file">Maske yükle<input type="file" id="bl-m-file" accept="image/*"></label>
+          </div>
+          <div class="canvas-box drop" data-drop="M"><canvas id="bl-M" class="maskpaint"></canvas></div>
+          <div class="row tight" id="bl-circle"><span class="sub">merkez x</span><input type="range" id="bl-cx" min="0" max="1" step="0.005" value="0.5"><span class="sub">y</span><input type="range" id="bl-cy" min="0" max="1" step="0.005" value="0.55"><span class="sub">yarıçap</span><input type="range" id="bl-cr" min="0.03" max="0.7" step="0.005" value="0.28"></div>
+          <div class="row tight" id="bl-brush">
+            <span class="sub">Fırça</span>
+            <div class="seg">
+              <label><input type="radio" name="bl-bv" value="1" checked><span>A (beyaz)</span></label>
+              <label><input type="radio" name="bl-bv" value="0"><span>B (siyah)</span></label>
+            </div>
+            <input type="range" id="bl-bsize" min="2" max="80" value="24">
+            <button class="mini" id="bl-mclear">Temizle</button>
+            <button class="mini" id="bl-minv">Ters çevir</button>
+          </div>
+          <p class="hint">“Fırçayla çiz” seçiliyken maskenin üzerine çizin. Beyaz bölgeden A, siyah bölgeden B gelir.</p>
+        </div>
+      </div>
       <div class="row ctl">
-        <label>A <select id="bl-a"></select></label>
-        <label class="file">A yükle<input type="file" id="bl-a-file" accept="image/*"></label>
-        <label>B <select id="bl-b"></select></label>
-        <label class="file">B yükle<input type="file" id="bl-b-file" accept="image/*"></label>
-        <label>Maske
-          <select id="bl-mask">
-            <option value="v" selected>Dikey: sol yarı A</option>
-            <option value="h">Yatay: üst yarı A</option>
-            <option value="c">Daire: içi A</option>
-            <option value="d">Çapraz</option>
-          </select>
-        </label>
-        <label>Seviye <input type="range" id="bl-levels" min="0" max="7" value="6"><output id="bl-levels-o">6</output></label>
+        <label>Piramit seviyesi <input type="range" id="bl-levels" min="0" max="7" value="6"><output id="bl-levels-o">6</output></label>
+        <label>Tek Gauss yumuşatma <input type="range" id="bl-feather" min="0" max="7" value="3"><output id="bl-feather-o">3</output></label>
+        <button id="bl-download">Sonucu PNG indir</button>
       </div>
-      <div class="grid5">
-        <figure><div class="canvas-box"><canvas id="bl-A"></canvas></div><figcaption>(a) A</figcaption></figure>
-        <figure><div class="canvas-box"><canvas id="bl-B"></canvas></div><figcaption>(b) B</figcaption></figure>
-        <figure><div class="canvas-box"><canvas id="bl-M"></canvas></div><figcaption>Maske</figcaption></figure>
-        <figure><div class="canvas-box"><canvas id="bl-cut"></canvas></div><figcaption>Doğrudan kesip yapıştırma</figcaption></figure>
-        <figure><div class="canvas-box"><canvas id="bl-out"></canvas></div><figcaption><b>Laplacian harmanlama</b></figcaption></figure>
+      <div class="grid3">
+        <figure><div class="canvas-box"><canvas id="bl-cut"></canvas></div><figcaption><b>1. Doğrudan kesip yapıştırma</b>: keskin dikiş görünür.</figcaption></figure>
+        <figure><div class="canvas-box"><canvas id="bl-feath"></canvas></div><figcaption id="bl-feath-cap"><b>2. Tek Gauss ile yumuşak geçiş</b>: dar geçişte dikiş, geniş geçişte hayalet (iki görüntü üst üste) oluşur.</figcaption></figure>
+        <figure><div class="canvas-box"><canvas id="bl-out"></canvas></div><figcaption><b>3. Laplacian piramidiyle harmanlama</b>: her frekans bandı kendi ölçeğine uygun genişlikte karışır.</figcaption></figure>
       </div>
-      <p class="hint">Seviye 0 seçilirse piramit kullanılmaz ve sonuç doğrudan kesmeyle aynı olur. Seviye arttıkça düşük frekanslar daha geniş bir bölgede, ince ayrıntılar dar bir bölgede karışır.</p>
+      <p class="hint" id="bl-msg">Seviye 0 seçilirse piramit kullanılmaz ve sonuç doğrudan kesmeyle aynı olur. Seviye arttıkça düşük frekanslar daha geniş bir bölgede, ince ayrıntılar dar bir bölgede karışır.</p>
       <h3>Seviye seviye katkılar (slayt 45, 47)</h3>
       <p>Satırlar yüksek frekanstan alçağa doğru seviyeler. Sütunlar: maskeyle ağırlıklandırılmış A ve B Laplacian’ları ve toplamları. Hepsi tam boyuta büyütülmüş, Laplacian’lar gri (0) etrafında gösterilmiştir.</p>
       <div class="bl-table" id="bl-table"></div>
@@ -429,11 +466,12 @@
 
   <footer class="notes">
     <p>Kaynak: CMP473 Introduction to Image Processing, Hafta 8 “Image Pyramids” (slaytlar: B. Freeman &amp; A. Torralba, D. Hoiem, R. Pless, H. Hel-Or; P. Burt &amp; E. Adelson, 1983). Bu sayfadaki tüm görüntüler tarayıcıda sentetik olarak üretilir.</p>
+    <p>Gerçek fotoğraflar: elma ve portakal OpenCV örnek verilerinden (opencv/samples/data, Burt &amp; Adelson’un klasik elma–portakal örneği). Kameraman, kedi (Chelsea), kahve, tuğla, çim ve çakıl scikit-image örnek verilerinden (CC0). Astronot, Hubble ve sikkeler kamu malı (NASA, Walters Sanat Müzesi). Roket fotoğrafı SpaceX (CC0). Yıldızlı Gece: Van Gogh, 1889 (kamu malı). Görseller 512×512’ye kırpılıp küçültülmüştür.</p>
     <p>Kenarlarda yansıtma (reflect) kullanılır. REDUCE: süz, sonra her iki yönde ikide bir örnek al. EXPAND: araya sıfır ekle, aynı çekirdeğin 2 katıyla (2B’de toplam 4 katı) süz.</p>
   </footer>
 
   <script src="../examples.js?v=3"></script>
-  <script src="examples-pyr.js?v=1"></script>
-  <script src="pyramid.js?v=2"></script>
+  <script src="examples-pyr.js?v=2"></script>
+  <script src="pyramid.js?v=3"></script>
 </body>
 </html>
