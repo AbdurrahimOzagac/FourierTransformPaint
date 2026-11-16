@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Laplacian Piramidi</title>
+  <meta name="description" content="CMP473 Hafta 8 slaytlarıyla eş zamanlı: Gauss ve Laplacian piramidi, geri dönüşüm ve görüntü harmanlama.">
+  <link rel="stylesheet" href="pyramid.css?v=2">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <p class="crumb"><a href="../">← Fourier Paint</a> · CMP473 Hafta 8</p>
+      <h1>Görüntü Piramitleri: Gauss ve Laplacian</h1>
+      <p>Bu sayfa “Image Pyramids” slaytlarını sırayla izler. Her bölümün başında ilgili slayt numarası yazar. Görüntüyü seçin ya da üzerine çizin; aşağıdaki tüm adımlar anlık olarak yeniden hesaplanır.</p>
+    </div>
+  </header>
+
+  <!-- Ortak kontroller (yapışkan) -->
+  <div class="bar" id="bar">
+    <div class="bar-inner">
+      <label>Görüntü
+        <select id="g-example"></select>
+      </label>
+      <label class="file">Yükle<input type="file" id="g-file" accept="image/*"></label>
+      <label>Boyut
+        <select id="g-size">
+          <option value="256" selected>256 × 256</option>
+          <option value="512">512 × 512</option>
+        </select>
+      </label>
+      <label title="Kaç kez küçültme (REDUCE) yapılacak">Seviye K
+        <input type="range" id="g-levels" min="1" max="7" value="4">
+        <output id="g-levels-o">4</output>
+      </label>
+      <label title="Burt–Adelson üreteç çekirdeği [¼−a/2, ¼, a, ¼, ¼−a/2]">Çekirdek a
+        <input type="range" id="g-a" min="0.25" max="0.6" step="0.005" value="0.375">
+        <output id="g-a-o">0.375</output>
+      </label>
+      <label>Laplacian kontrastı
+        <select id="g-lapgain">
+          <option value="auto" selected>Otomatik</option>
+          <option value="1">×1</option>
+          <option value="2">×2</option>
+          <option value="4">×4</option>
+          <option value="8">×8</option>
+        </select>
+      </label>
+    </div>
+    <nav class="toc" aria-label="Bölümler">
+      <a href="#s-source">Görüntü</a>
+      <a href="#s-match">1 · Şablon eşleme</a>
+      <a href="#s-sampling">2 · Örnekleme</a>
+      <a href="#s-gauss">3 · Gauss piramidi</a>
+      <a href="#s-matrix">4 · Matris</a>
+      <a href="#s-lap">5 · Laplacian</a>
+      <a href="#s-up">6 · Yukarı örnekleme</a>
+      <a href="#s-full">7 · Frekans bantları</a>
+      <a href="#s-recon">8 · Geri dönüşüm</a>
+      <a href="#s-apps">9 · Uygulamalar</a>
+      <a href="#s-blend">10 · Harmanlama</a>
+    </nav>
+  </div>
+
+  <main>
+    <!-- ================================================================ Kaynak -->
+    <section class="sec" id="s-source">
+      <div class="sec-head">
+        <h2>Giriş görüntüsü <span class="math">x₁ = g₀</span></h2>
+        <span class="slides">Slayt 1–2, 11–12</span>
+      </div>
+      <div class="split">
+        <div class="col">
+          <div class="canvas-box big"><canvas id="src-canvas"></canvas></div>
+          <p class="readout" id="src-readout">&nbsp;</p>
+        </div>
+        <div class="col text">
+          <p class="lead" id="ex-info"></p>
+          <p>Görüntü bilgisi farklı uzamsal ölçeklerde bulunur: zebranın çizgileri ince, başın biçimi kabadır. <b>Görüntü piramitleri</b> görüntüyü birden çok çözünürlükte temsil eden veri yapılarıdır (slayt 11).</p>
+          <ul>
+            <li><b>Gauss piramidi:</b> aynı görüntünün giderek küçülen, bulanık kopyaları.</li>
+            <li><b>Laplacian piramidi:</b> ardışık Gauss seviyeleri arasındaki farklar, yani frekans bantları. Bu bantlardan görüntü <b>tam olarak</b> geri elde edilir.</li>
+          </ul>
+          <div class="tools">
+            <div class="row">
+              <span class="lbl">Kalem</span>
+              <input type="range" id="pen-size" min="1" max="48" value="6">
+              <output id="pen-size-o">6 px</output>
+            </div>
+            <div class="row">
+              <span class="lbl">Renk</span>
+              <input type="range" id="pen-value" class="gray" min="0" max="255" value="255">
+              <output id="pen-value-o">255</output>
+              <button class="mini" data-pen="0">Siyah</button>
+              <button class="mini" data-pen="255">Beyaz</button>
+            </div>
+            <div class="row">
+              <button id="src-reset">Örneği yeniden yükle</button>
+              <button id="src-clear">Tümü gri (128)</button>
+            </div>
+            <p class="hint">Görüntüye çizin: piramitler, geri dönüşüm ve frekans bantları anında güncellenir.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 1. Şablon eşleme -->
+    <section class="sec" id="s-match">
+      <div class="sec-head">
+        <h2>1 · Neden piramit? Şablon eşleme</h2>
+        <span class="slides">Slayt 3–10, 25–26</span>
+      </div>
+      <p>Amaç: görüntüde küçük bir şablonu (ör. bir göz) bulmak. İki benzerlik ölçüsü:</p>
+      <div class="eqs">
+        <div><b>SSD</b> <span class="math">h[m,n] = Σ<sub>k,l</sub> (g[k,l] − f[m+k, n+l])²</span> — hızlı ama ortalama parlaklığa duyarlı.</div>
+        <div><b>NCC</b> <span class="math">h[m,n] = Σ (g − ḡ)(f − f̄<sub>m,n</sub>) / √(Σ(g − ḡ)² · Σ(f − f̄<sub>m,n</sub>)²)</span> — yavaş ama ortalama ve kontrasta karşı değişmez.</div>
+      </div>
+      <p><b>Soru:</b> Daha büyük ya da küçük gözleri nasıl buluruz? <b>Cevap: görüntü piramidi</b> (slayt 10). Şablonun boyutu sabit kalır, görüntü her seviyede yarıya iner (slayt 26, seçenek 2). Böylece 2× büyük göz 1. seviyede, 4× büyük göz 2. seviyede şablonla aynı boyuta gelir.</p>
+      <div class="row ctl">
+        <label>Görüntü
+          <select id="tm-src">
+            <option value="eyes" selected>Üç ölçekte göz</option>
+            <option value="main">Ana görüntü (yukarıdaki)</option>
+          </select>
+        </label>
+        <label>Ölçü
+          <select id="tm-method">
+            <option value="ncc" selected>NCC (normalize çapraz korelasyon)</option>
+            <option value="ssd">1 − √SSD (normalize)</option>
+          </select>
+        </label>
+        <label>Eşik <input type="range" id="tm-thr" min="0.5" max="0.99" step="0.01" value="0.8"><output id="tm-thr-o">0.80</output></label>
+      </div>
+      <div class="split">
+        <div class="col">
+          <div class="canvas-box big"><canvas id="tm-canvas" class="select"></canvas></div>
+          <p class="hint">Şablonu seçmek için görüntü üzerinde bir dikdörtgen sürükleyin. Kutular bulunan eşleşmeleri gösterir; renk, eşleşmenin bulunduğu seviyedir.</p>
+        </div>
+        <div class="col">
+          <div class="tpl-row">
+            <div><span class="cap">Şablon g</span><div class="canvas-box tpl"><canvas id="tm-tpl"></canvas></div></div>
+            <p class="hint" id="tm-info"></p>
+          </div>
+          <ol class="steps">
+            <li>Şablonu mevcut ölçekte eşle.</li>
+            <li>Görüntüyü küçült (Gauss piramidinde bir seviye yukarı çık).</li>
+            <li>Görüntü çok küçülene kadar 1–2’yi tekrarla.</li>
+            <li>Eşiği geçen yanıtları al, yerel maksimum olmayanları bastır (non-maxima suppression).</li>
+          </ol>
+        </div>
+      </div>
+      <div class="levels" id="tm-levels"></div>
+    </section>
+
+    <!-- ================================================================ 2. Örnekleme -->
+    <section class="sec" id="s-sampling">
+      <div class="sec-head">
+        <h2>2 · Örnekleme hatırlatması</h2>
+        <span class="slides">Slayt 14</span>
+      </div>
+      <div class="flow">
+        <span class="node">Görüntü</span><span class="arr">Gauss filtresi →</span>
+        <span class="node">Alçak geçiren görüntü</span><span class="arr">Örnekle →</span>
+        <span class="node">Düşük çözünürlüklü görüntü</span>
+      </div>
+      <p>Önce bulanıklaştırmadan seyreltirsek, Nyquist sınırının üstündeki frekanslar düşük frekans gibi görünür (<b>örtüşme / aliasing</b>). Gauss filtresi bu frekansları önceden bastırır. Örtüşmeyi açıkça görmek için “Bölge plakası” ya da “Dama tahtası” örneğini seçin.</p>
+      <div class="row ctl">
+        <label>Küçültme oranı
+          <select id="smp-factor">
+            <option value="2">2</option>
+            <option value="4" selected>4</option>
+            <option value="8">8</option>
+          </select>
+        </label>
+        <button id="smp-zone">Bölge plakasını yükle</button>
+      </div>
+      <div class="grid4">
+        <figure><div class="canvas-box"><canvas id="smp-orig"></canvas></div><figcaption>Görüntü</figcaption></figure>
+        <figure><div class="canvas-box"><canvas id="smp-blur"></canvas></div><figcaption>Gauss ile süzülmüş (aynı boyut)</figcaption></figure>
+        <figure><div class="canvas-box"><canvas id="smp-good"></canvas></div><figcaption id="smp-good-cap">Süz + örnekle</figcaption></figure>
+        <figure><div class="canvas-box"><canvas id="smp-bad"></canvas></div><figcaption id="smp-bad-cap">Süzmeden örnekle (örtüşme)</figcaption></figure>
+      </div>
+    </section>
+
+    <!-- ================================================================ 3. Gauss piramidi -->
+    <section class="sec" id="s-gauss">
+      <div class="sec-head">
+        <h2>3 · Gauss piramidi</h2>
+        <span class="slides">Slayt 13–18, 24</span>
+      </div>
+      <div class="split">
+        <div class="col text">
+          <ul>
+            <li>Girdi görüntüsünün birden çok çözünürlükte kopyalarını üretir.</li>
+            <li>Farklı ölçeklerde analiz için yararlıdır, ama görüntüyü frekans bantlarına <b>ayırmaz</b>.</li>
+            <li>Gauss ile yumuşatılır, çünkü Gauss ∗ Gauss = yine Gauss; Gauss bir alçak geçiren filtredir.</li>
+          </ul>
+          <div class="eqs">
+            <div><span class="math">g₀ = GÖRÜNTÜ</span></div>
+            <div><span class="math">g<sub>l</sub> = REDUCE[g<sub>l−1</sub>]</span>: üreteç çekirdeğiyle süz, her iki yönde 2’ye seyrelt.</div>
+            <div>Üreteç çekirdeği: <span class="math" id="kernel-text"></span></div>
+          </div>
+          <p class="hint">a = 0.375 için çekirdek [1 4 6 4 1]/16 olur (slaytlardaki filtre). a = 0.4 Burt–Adelson makalesindeki değerdir. Üstteki “Çekirdek a” sürgüsüyle değiştirin.</p>
+        </div>
+        <div class="col">
+          <svg id="gauss-1d" class="diagram" viewBox="0 0 520 220" role="img" aria-label="1B Gauss piramidi diyagramı"></svg>
+          <p class="hint">Slayt 16: her düğüm, bir alt seviyedeki 5 düğümün a, b, c ağırlıklı ortalamasıdır. Düğüm aralığı her seviyede iki katına çıkar, ağırlık deseni aynı kalır.</p>
+        </div>
+      </div>
+      <h3>Seviyeler aynı boyutta gösterildiğinde (slayt 18, üst sıra)</h3>
+      <div class="levels same" id="gauss-same"></div>
+      <h3>Gerçek boyutlarıyla (slayt 17–18)</h3>
+      <div class="canvas-box layout"><canvas id="gauss-layout"></canvas></div>
+      <p class="hint">Gauss piramidinin kullanım alanları (slayt 24): görüntüyü büyütme/küçültme, nesneyi farklı ölçeklerde arama, kabadan inceye işleme (hareket ya da bulanıklık kestirimini küçük görüntüde yapıp büyütmek ve tekrarlamak).</p>
+    </section>
+
+    <!-- ================================================================ 4. Matris -->
+    <section class="sec" id="s-matrix">
+      <div class="sec-head">
+        <h2>4 · Konvolüsyon ve seyreltme bir matris çarpımıdır (1B)</h2>
+        <span class="slides">Slayt 19–23, 25</span>
+      </div>
+      <p>1B sinyal <span class="math">x₁</span> için süzme + 2’ye seyreltme doğrusal bir işlemdir: <span class="math">x₂ = G₁x₁</span>, <span class="math">x₃ = G₂x₂ = G₂G₁x₁</span>. Matrislerde 1/16 normalizasyon katsayısı okunabilirlik için yazılmamıştır (değerler ×16).</p>
+      <div class="mats">
+        <div><h4><span class="math">G₁</span> (8 × 20)</h4><div class="mat" id="mat-g1"></div></div>
+        <div><h4><span class="math">G₂</span> (4 × 8)</h4><div class="mat" id="mat-g2"></div></div>
+        <div><h4><span class="math">G₂G₁</span> (4 × 20, değerler ×256)</h4><div class="mat" id="mat-g2g1"></div></div>
+      </div>
+      <div class="split">
+        <div class="col">
+          <h3>Eşdeğer ağırlık fonksiyonları (slayt 23)</h3>
+          <svg id="eqw" class="chart" viewBox="0 0 480 300" role="img" aria-label="Eşdeğer ağırlık fonksiyonları"></svg>
+          <p class="hint">Seviye l’deki bir düğümün orijinal piksellere göre ağırlıkları: <span class="math">h₁ = G₁</span> satırı, <span class="math">h₂ = G₂G₁</span>, <span class="math">h₃ = G₃G₂G₁</span>. Eksenler 2’nin katlarıyla ölçeklenmiştir. Kesikli eğri aynı varyanslı Gauss: seviyeler arttıkça ağırlıklar Gauss’a yaklaşır.</p>
+        </div>
+        <div class="col">
+          <h3>1B Gauss piramidi matrisi (slayt 25)</h3>
+          <div class="canvas-box matimg"><canvas id="mat-gauss-img"></canvas></div>
+          <p class="hint">Üstte birim matris (tam bant, en yüksek çözünürlük), altında <span class="math">G₁</span> (düşük çözünürlük) ve <span class="math">G₂G₁</span> (en düşük çözünürlük). Satırlar giderek genişleyen bulanıklık çekirdekleridir.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 5. Laplacian -->
+    <section class="sec" id="s-lap">
+      <div class="sec-head">
+        <h2>5 · Laplacian piramidi: adım adım</h2>
+        <span class="slides">Slayt 27–35</span>
+      </div>
+      <ul>
+        <li>Her seviyede, Gauss seviyesi ile bir üst seviyenin <b>büyütülmüş</b> hâli arasındaki fark alınır.</li>
+        <li>Bant geçiren filtre: her seviye diğer seviyelerde (büyük ölçüde) bulunmayan uzamsal frekansları taşır.</li>
+        <li>Gauss piramidine göre ek bir analiz düzeyi sağlar: görüntüyü <b>izotropik</b> uzamsal frekans bantlarına böler.</li>
+      </ul>
+      <p class="math-note"><span class="math">G<sub>l</sub></span>: süz-ve-küçült (REDUCE), <span class="math">F<sub>l</sub></span>: büyüt-ve-süz (EXPAND), <span class="math">L<sub>l</sub> = (I − F<sub>l</sub>G<sub>l</sub>) x<sub>l</sub></span>, <span class="math">x<sub>l+1</sub> = G<sub>l</sub>x<sub>l</sub></span>.</p>
+      <div class="stepper">
+        <button id="lap-prev">◀ Önceki</button>
+        <button id="lap-next" class="primary">Sonraki ▶</button>
+        <button id="lap-play">▶ Oynat</button>
+        <button id="lap-all">Tümünü göster</button>
+        <span class="step-count" id="lap-count"></span>
+      </div>
+      <p class="caption" id="lap-caption"></p>
+      <div class="lap-flow" id="lap-flow"></div>
+    </section>
+
+    <!-- ================================================================ 6. Yukarı örnekleme -->
+    <section class="sec" id="s-up">
+      <div class="sec-head">
+        <h2>6 · Yukarı örnekleme (EXPAND)</h2>
+        <span class="slides">Slayt 36</span>
+      </div>
+      <div class="split">
+        <div class="col text">
+          <p><span class="math">y₂ = F₃x₃</span>: pikseller arasına sıfır ekle, sonra [1 4 6 4 1] alçak geçiren filtreyi uygula. Sıfırlar yüzünden enerji azaldığı için 1B’de ×2, 2B’de ×4 ile çarpılır (normalizasyon 1/8).</p>
+          <h4><span class="math">F₃</span> (8 × 4, değerler ×16, sınırda kırpılmış)</h4>
+          <div class="mat" id="mat-f3"></div>
+        </div>
+        <div class="col">
+          <div class="row ctl">
+            <label>Seviye <select id="up-level"></select></label>
+          </div>
+          <div class="grid3">
+            <figure><div class="canvas-box"><canvas id="up-small"></canvas></div><figcaption id="up-small-cap">g</figcaption></figure>
+            <figure><div class="canvas-box"><canvas id="up-zeros"></canvas></div><figcaption>Araya sıfır eklenmiş (×4 parlak)</figcaption></figure>
+            <figure><div class="canvas-box"><canvas id="up-result"></canvas></div><figcaption>Süzülmüş: EXPAND[g]</figcaption></figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 7. Tam çözünürlük / frekans -->
+    <section class="sec" id="s-full">
+      <div class="sec-head">
+        <h2>7 · Her seviyedeki bilgi, tam çözünürlükte</h2>
+        <span class="slides">Slayt 37, 40–42</span>
+      </div>
+      <p>Üst sıra: Gauss seviyeleri, tam boyuta büyütülmüş. Alt sıra: Laplacian seviyeleri. Her Laplacian seviyesi, karşılık gelen Gauss seviyesi ile bir sonrakinin farkıdır: <span class="math">L<sub>l</sub> = ↑g<sub>l</sub> − ↑g<sub>l+1</sub></span>. Son seviye artık (residual) Gauss seviyesidir.</p>
+      <div class="full-grid" id="full-grid"></div>
+
+      <h3>Laplacian piramidi gerçek boyutlarıyla (slayt 41)</h3>
+      <div class="canvas-box layout"><canvas id="lap-layout"></canvas></div>
+
+      <h3>Fourier ile bakış: her seviye bir frekans bandıdır</h3>
+      <p>Fourier Paint’teki gibi merkezlenmiş genlik spektrumu <span class="math">log(1 + |F(u,v)|)</span>. Her Laplacian seviyesi yaklaşık bir oktavlık, halka biçimli (izotropik) bir bant kaplar. Son seviye, ortadaki alçak frekanslardır.</p>
+      <div class="levels same" id="full-spectra"></div>
+      <div class="split">
+        <div class="col">
+          <h4>Radyal ortalama genlik (seviye başına normalize)</h4>
+          <div class="legend" id="radial-legend"></div>
+          <div class="chart-wrap">
+            <svg id="radial" class="chart" viewBox="0 0 520 280" role="img" aria-label="Seviyelere göre radyal ortalama genlik spektrumu"></svg>
+            <div class="tip" id="radial-tip" hidden></div>
+          </div>
+          <p class="hint">Yatay eksen: frekans (görüntü başına devir, logaritmik). Her eğri kendi en büyük değerine bölünmüştür, böylece bantların konumu karşılaştırılabilir. Görüntüde baskın bir frekans varsa (zebranın çizgileri gibi) bu frekans birkaç seviyede birden tepe yapar. Bantların kendisini görmek için tüm frekansları eşit içeren beyaz gürültüyü deneyin: her seviyenin tepesi bir öncekinin yaklaşık yarı frekansına kayar.</p>
+          <div class="row ctl"><button id="full-noise">Beyaz gürültüyle dene</button></div>
+        </div>
+        <div class="col">
+          <h4>1B Laplacian piramidi matrisi (slayt 42)</h4>
+          <div class="canvas-box matimg"><canvas id="mat-lap-img"></canvas></div>
+          <p class="hint">Üstte <span class="math">I − F₁G₁</span> (yüksek frekanslar), ortada <span class="math">(I − F₂G₂)G₁</span> (orta bant), altta <span class="math">G₂G₁</span> (alçak frekanslar). Gri = 0.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 8. Geri dönüşüm -->
+    <section class="sec" id="s-recon">
+      <div class="sec-head">
+        <h2>8 · Geri dönüşüm: Laplacian piramidinden x₁’i elde etmek</h2>
+        <span class="slides">Slayt 38–39</span>
+      </div>
+      <div class="split">
+        <div class="col text">
+          <h4>Laplacian piramidinin elemanları</h4>
+          <pre class="algo" id="recon-elems"></pre>
+        </div>
+        <div class="col text">
+          <h4>Orijinal görüntünün (x₁) geri çatılması</h4>
+          <pre class="algo" id="recon-steps"></pre>
+          <p>Kaba seviyeden başlanır; her adımda büyütülür ve o seviyenin Laplacian’ı eklenir. Hiçbir şey atılmadığı için sonuç <b>tam olarak</b> orijinaldir (yalnızca kayan nokta yuvarlama hatası).</p>
+        </div>
+      </div>
+      <div class="stepper">
+        <button id="rec-prev">◀ Önceki</button>
+        <button id="rec-next" class="primary">Sonraki ▶</button>
+        <button id="rec-play">▶ Oynat</button>
+        <button id="rec-all">Tümünü göster</button>
+        <span class="step-count" id="rec-count"></span>
+      </div>
+      <p class="caption" id="rec-caption"></p>
+      <div class="rec-flow" id="rec-flow"></div>
+      <div class="verify" id="rec-verify"></div>
+    </section>
+
+    <!-- ================================================================ 9. Uygulamalar -->
+    <section class="sec" id="s-apps">
+      <div class="sec-head">
+        <h2>9 · Seviyelerle oynamak: uygulamalar</h2>
+        <span class="slides">Slayt 43</span>
+      </div>
+      <p>Laplacian piramidi uygulamaları: doku sentezi, <b>görüntü sıkıştırma</b>, <b>gürültü giderme</b> (Burt &amp; Adelson, “The Laplacian Pyramid as a Compact Image Code”, 1983). Geri çatmadan önce seviyeleri değiştirin:</p>
+      <div class="split">
+        <div class="col">
+          <div class="row ctl presets">
+            <button data-preset="identity">Orijinal</button>
+            <button data-preset="denoise">Gürültü giderme (L₁ = 0)</button>
+            <button data-preset="sharpen">Keskinleştirme</button>
+            <button data-preset="coarse">Yalnız kaba yapı</button>
+            <button data-preset="detail">Yalnız ayrıntı</button>
+            <button data-preset="compress">Sıkıştırma (nicemleme)</button>
+          </div>
+          <div class="gains" id="app-gains"></div>
+          <div class="row">
+            <span class="lbl">Nicemleme</span>
+            <input type="range" id="app-q" min="0" max="40" step="1" value="0">
+            <output id="app-q-o">kapalı</output>
+          </div>
+          <p class="hint">Nicemleme: Laplacian katsayıları q adımına yuvarlanır (<span class="math">round(L/q)·q</span>). Küçük katsayılar sıfır olur; sıfırlar çok iyi sıkıştırılır.</p>
+          <div class="stats" id="app-stats"></div>
+        </div>
+        <div class="col">
+          <div class="grid2">
+            <figure><div class="canvas-box"><canvas id="app-result"></canvas></div><figcaption>Geri çatılan görüntü</figcaption></figure>
+            <figure><div class="canvas-box"><canvas id="app-diff"></canvas></div><figcaption>Fark (sonuç − orijinal), gri = 0</figcaption></figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 10. Harmanlama -->
+    <section class="sec" id="s-blend">
+      <div class="sec-head">
+        <h2>10 · Görüntü harmanlama (blending)</h2>
+        <span class="slides">Slayt 44–47</span>
+      </div>
+      <ol class="steps">
+        <li>İki görüntü için Laplacian piramidi kur: <span class="math">LA, LB</span>.</li>
+        <li>Maske için Gauss piramidi kur: <span class="math">G</span>.</li>
+        <li>Birleşik Laplacian piramidi: <span class="math">L(j) = G(j)·LA(j) + (1 − G(j))·LB(j)</span>.</li>
+        <li><span class="math">L</span>’yi geri çat (collapse): harmanlanmış görüntü.</li>
+      </ol>
+      <div class="row ctl">
+        <label>A <select id="bl-a"></select></label>
+        <label class="file">A yükle<input type="file" id="bl-a-file" accept="image/*"></label>
+        <label>B <select id="bl-b"></select></label>
+        <label class="file">B yükle<input type="file" id="bl-b-file" accept="image/*"></label>
+        <label>Maske
+          <select id="bl-mask">
+            <option value="v" selected>Dikey: sol yarı A</option>
+            <option value="h">Yatay: üst yarı A</option>
+            <option value="c">Daire: içi A</option>
+            <option value="d">Çapraz</option>
+          </select>
+        </label>
+        <label>Seviye <input type="range" id="bl-levels" min="0" max="7" value="6"><output id="bl-levels-o">6</output></label>
+      </div>
+      <div class="grid5">
+        <figure><div class="canvas-box"><canvas id="bl-A"></canvas></div><figcaption>(a) A</figcaption></figure>
+        <figure><div class="canvas-box"><canvas id="bl-B"></canvas></div><figcaption>(b) B</figcaption></figure>
+        <figure><div class="canvas-box"><canvas id="bl-M"></canvas></div><figcaption>Maske</figcaption></figure>
+        <figure><div class="canvas-box"><canvas id="bl-cut"></canvas></div><figcaption>Doğrudan kesip yapıştırma</figcaption></figure>
+        <figure><div class="canvas-box"><canvas id="bl-out"></canvas></div><figcaption><b>Laplacian harmanlama</b></figcaption></figure>
+      </div>
+      <p class="hint">Seviye 0 seçilirse piramit kullanılmaz ve sonuç doğrudan kesmeyle aynı olur. Seviye arttıkça düşük frekanslar daha geniş bir bölgede, ince ayrıntılar dar bir bölgede karışır.</p>
+      <h3>Seviye seviye katkılar (slayt 45, 47)</h3>
+      <p>Satırlar yüksek frekanstan alçağa doğru seviyeler. Sütunlar: maskeyle ağırlıklandırılmış A ve B Laplacian’ları ve toplamları. Hepsi tam boyuta büyütülmüş, Laplacian’lar gri (0) etrafında gösterilmiştir.</p>
+      <div class="bl-table" id="bl-table"></div>
+    </section>
+  </main>
+
+  <footer class="notes">
+    <p>Kaynak: CMP473 Introduction to Image Processing, Hafta 8 “Image Pyramids” (slaytlar: B. Freeman &amp; A. Torralba, D. Hoiem, R. Pless, H. Hel-Or; P. Burt &amp; E. Adelson, 1983). Bu sayfadaki tüm görüntüler tarayıcıda sentetik olarak üretilir.</p>
+    <p>Kenarlarda yansıtma (reflect) kullanılır. REDUCE: süz, sonra her iki yönde ikide bir örnek al. EXPAND: araya sıfır ekle, aynı çekirdeğin 2 katıyla (2B’de toplam 4 katı) süz.</p>
+  </footer>
+
+  <script src="../examples.js?v=3"></script>
+  <script src="examples-pyr.js?v=1"></script>
+  <script src="pyramid.js?v=2"></script>
+</body>
+</html>

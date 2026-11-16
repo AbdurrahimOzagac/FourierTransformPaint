@@ -31,9 +31,26 @@ Spektruma `g` değeriyle çizmek, o frekansın genliğini `|F| = e^(g·L/255) �
 - **Simetri korunur.** `(u, v)` noktasına çizim yapıldığında `(−u, −v)` noktası da eşleniği olacak şekilde güncellenir, böylece ters dönüşüm gerçel bir görüntü verir.
 - Ters dönüşümün sonucu 0–255 aralığı dışına çıkabilir. Sol panel bu değerleri kırparak gösterir. Tümünü görmek için “normalize et” seçeneğini açın.
 
+## Laplacian Piramidi sayfası (`pyramid/`)
+
+CMP473 Hafta 8 “Image Pyramids” slaytlarıyla eş zamanlı ilerleyen ikinci sayfa. Her bölümün başında ilgili slayt numaraları yazar:
+
+1. **Şablon eşleme** (slayt 3–10, 25–26): SSD ve NCC; sabit boyutlu şablonla piramidin her seviyesinde arama, farklı boyuttaki gözleri bulma
+2. **Örnekleme** (slayt 14): Gauss ile süzüp seyreltme ve süzmeden seyreltmenin yol açtığı örtüşme
+3. **Gauss piramidi** (slayt 13–18): REDUCE, 1B düğüm diyagramı, seviyeler aynı boyutta ve gerçek boyutta
+4. **Matris gösterimi** (slayt 19–25): `G₁`, `G₂`, `G₂G₁` matrisleri, eşdeğer ağırlık fonksiyonları, 1B piramit matrisi
+5. **Laplacian piramidi adım adım** (slayt 27–35): `x₁ → G₁x₁ → F₁G₁x₁ → L₁ = (I − F₁G₁)x₁ …` animasyonu
+6. **Yukarı örnekleme** (slayt 36): araya sıfır ekleme ve süzme, `F₃` matrisi
+7. **Frekans bantları** (slayt 37, 40–42): seviyeler tam çözünürlükte, her seviyenin Fourier spektrumu ve radyal genlik grafiği
+8. **Geri dönüşüm** (slayt 38–39): `x_k = L_k + F_k x_{k+1}` adım adım; hata ölçümü (mükemmel geri çatma)
+9. **Uygulamalar** (slayt 43): seviye kazançları, gürültü giderme, keskinleştirme, nicemleme ile sıkıştırma
+10. **Görüntü harmanlama** (slayt 44–47): elma/portakal, maske Gauss piramidi, seviye seviye katkılar
+
+Ortak ayarlar: görüntü seçimi ya da yükleme, 256/512 boyut, seviye sayısı K, Burt–Adelson çekirdek parametresi `a` (0.375 → [1 4 6 4 1]/16), Laplacian kontrastı. Giriş görüntüsüne çizim yapılabilir; tüm bölümler anında güncellenir.
+
 ## GitHub Pages'te yayınlama
 
-Derleme adımı yoktur; uygulama yalnızca `index.html`, `style.css` ve `app.js` dosyalarından oluşur.
+Derleme adımı yoktur; uygulama statik dosyalardan oluşur (`index.html`, `style.css`, `app.js`, `examples.js` ve `pyramid/` klasörü).
 
 1. Depoda **Settings → Pages** sayfasına gidin.
 2. **Source** olarak “Deploy from a branch” seçin, dalı (ör. `main`) ve `/ (root)` klasörünü seçip kaydedin.
