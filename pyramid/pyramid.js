@@ -264,7 +264,7 @@
   const PHOTOS = PYR.photos;
   const FEX = (window.FOURIER_EXAMPLES || []).filter((e) => e.gen);
   const allGray = [...PYR.gray, ...FEX];
-  const maxK = () => Math.min(7, Math.log2(S.N) - 1);
+  const maxK = () => Math.log2(S.N); // 1×1'e kadar
 
   // Fotoğraflar: tembel yükleme + önbellek
   const photoCache = new Map();
@@ -984,12 +984,14 @@
   }
 
   let radialData = null;
+  let radialNames = [];
   function renderSpectra() {
     const K = S.K, N = S.N;
     const wrap = $('full-spectra');
     wrap.innerHTML = '';
     const bins = N / 2;
     const prof = [];
+    radialNames = [];
     fullUpL.forEach((L, l) => {
       const mag = fftMag(L.c[0], N);
       // Radyal ortalama (DC hariç)
@@ -1018,10 +1020,26 @@
       render(c, fromCh(N, N, [lg]), 'scale', { k: 255 / (mx || 1) });
       wrap.appendChild(f);
     });
+    // En fazla 8 eğri: 8'den fazla seviye varsa en kaba seviyeler tek eğride toplanır.
+    const names = fullUpL.map((_, l) => (l < K ? `L${sb(l + 1)}` : `x${sb(K + 1)}`));
+    if (prof.length > 8) {
+      const sum = fullUpL.slice(7).reduce((a, b) => add(a, b));
+      const mag = fftMag(sum.c[0], N);
+      const s2 = new Float64Array(bins + 1), c2 = new Float64Array(bins + 1);
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const r = Math.round(Math.hypot(x < N / 2 ? x : x - N, y < N / 2 ? y : y - N));
+        if (r <= bins) { s2[r] += mag[y * N + x]; c2[r]++; }
+      }
+      const pr = Array.from(s2, (v, r) => (c2[r] ? v / c2[r] : 0));
+      const pm = Math.max(...pr.slice(1)) || 1;
+      prof.splice(7, prof.length - 7, pr.map((v) => v / pm));
+      names.splice(7, names.length - 7, `L${sb(8)}…x${sb(K + 1)}`);
+    }
+    radialNames = names;
     radialData = prof;
     drawRadial();
   }
-  const levelName = (l) => (l < S.K ? `L${sb(l + 1)}` : `x${sb(S.K + 1)}`);
+  const levelName = (l) => radialNames[l] || '';
   function drawRadial(hoverR) {
     if (!radialData) return;
     const svg = $('radial');
@@ -1311,7 +1329,7 @@
   function renderBlend(withTable = true) {
     W = kernel(S.a);
     const N = S.N;
-    const Kb = Math.min(+$('bl-levels').value, Math.log2(N) - 1);
+    const Kb = Math.min(+$('bl-levels').value, Math.log2(N));
     const A = blendSource('A'), B = blendSource('B'), M = blendMask();
     updateMaskUI();
     render($('bl-M'), M, 'scale', { k: 255 });
@@ -1473,6 +1491,27 @@
     renderBlend();
   }
 
+  // Piramidin tepesi (en küçük seviye) ayarı
+  function syncKControls() {
+    const m = maxK();
+    for (const id of ['g-levels', 'bl-levels', 'bl-feather']) $(id).max = m;
+    $('g-levels').value = S.K;
+    const top = S.N >> S.K;
+    $('g-levels-o').textContent = `K = ${S.K} · ${top}×${top}`;
+    $('g-kdown').disabled = S.K <= 1;
+    $('g-kup').disabled = S.K >= m;
+  }
+  function setK(k) {
+    k = Math.max(1, Math.min(maxK(), k));
+    if (k === S.K) { syncKControls(); return; }
+    S.K = k;
+    syncKControls();
+    recompute();
+    buildLapFlow(); buildRecon(); buildGains(); buildUpSelect();
+    renderAll();
+    renderStatic();
+  }
+
   function wire() {
     $('g-example').onchange = (e) => {
       if (e.target.value === 'upload') {
@@ -1484,21 +1523,13 @@
     $('g-file').onchange = (e) => readFile(e.target, (im) => setMainUpload(im));
     $('g-size').onchange = (e) => {
       S.N = +e.target.value;
-      if (S.tpl) {/* şablon 256 biriminde: değişmez */}
-      $('g-levels').max = maxK();
       S.K = Math.min(S.K, maxK());
-      $('bl-levels').max = maxK();
-      $('bl-feather').max = maxK();
+      syncKControls();
       reloadImage().then(fullRefresh);
     };
-    $('g-levels').oninput = (e) => {
-      S.K = +e.target.value;
-      $('g-levels-o').textContent = S.K;
-      recompute();
-      buildLapFlow(); buildRecon(); buildGains(); buildUpSelect();
-      renderAll();
-      renderStatic();
-    };
+    $('g-levels').oninput = (e) => setK(+e.target.value);
+    $('g-kdown').onclick = () => setK(S.K - 1);
+    $('g-kup').onclick = () => setK(S.K + 1);
     $('g-a').oninput = (e) => {
       S.a = +e.target.value;
       $('g-a-o').textContent = S.a.toFixed(3);
@@ -1632,6 +1663,7 @@
   fillExampleSelect();
   wire();
   S.tpl = { ...PYR.gray.find((e) => e.id === 'eyes').template };
+  syncKControls();
   setMain('zebra').then(fullRefresh);
   // Harmanlamanın varsayılan fotoğraflarını önceden yükle
   Promise.all(['ph-apple', 'ph-orange'].map(photoPromise)).then(() => renderBlend()).catch(() => {});

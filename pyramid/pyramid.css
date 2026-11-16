@@ -276,3 +276,5 @@ pre.algo .hl { background: var(--accent-soft); color: var(--accent); border-radi
 canvas.maskpaint.on { cursor: crosshair; touch-action: none; }
 .status { color: var(--accent); }
 canvas { -webkit-user-select: none; user-select: none; }
+.ktop { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.ktop output { min-width: 8.5em; color: var(--text); }
