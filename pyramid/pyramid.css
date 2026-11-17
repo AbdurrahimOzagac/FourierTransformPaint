@@ -36,7 +36,7 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-padding-top: 120px; }
+html { scroll-padding-top: 70px; }
 body {
   margin: 0;
   background: var(--bg);
@@ -278,3 +278,26 @@ canvas.maskpaint.on { cursor: crosshair; touch-action: none; }
 canvas { -webkit-user-select: none; user-select: none; }
 .ktop { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
 .ktop output { min-width: 8.5em; color: var(--text); }
+
+/* ---- sadeleştirilmiş Laplacian bölümleri ---- */
+.down { display: grid; gap: 10px; overflow-x: auto; }
+.drow { display: grid; grid-template-columns: 70px repeat(5, auto); justify-content: start; align-items: center; gap: 8px; }
+.drow .pcell { width: 150px; }
+.dhead { font-size: 12px; color: var(--muted); }
+.dhead > div:empty { width: 16px; }
+.dlbl { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.dlbl b { font-size: 16px; color: var(--text); }
+.dnote { grid-column: 3 / span 4; color: var(--muted); font-size: 13px; max-width: 420px; }
+.dtop .pcell .canvas-box { outline: 3px solid var(--accent); outline-offset: 2px; }
+.op { color: var(--muted); font-size: 18px; text-align: center; white-space: nowrap; }
+.rec-top { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .rec-top { grid-template-columns: minmax(0, 1fr); } .drow .pcell { width: 110px; } }
+.rec-big .canvas-box { width: 100%; }
+.rec-flow { display: grid; gap: 10px; }
+.rrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.rrow .pcell { width: 104px; }
+.rrow .op { font-size: 13px; }
+.rrow.fresh .canvas-box { outline: 2px solid var(--accent); outline-offset: 1px; }
+.verify[hidden] { display: none; }
+.verify figure { width: 200px; }
+.badge { margin: 0; }

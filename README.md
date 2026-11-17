@@ -33,22 +33,11 @@ Spektruma `g` değeriyle çizmek, o frekansın genliğini `|F| = e^(g·L/255) �
 
 ## Laplacian Piramidi sayfası (`pyramid/`)
 
-CMP473 Hafta 8 “Image Pyramids” slaytlarıyla eş zamanlı ilerleyen ikinci sayfa. Her bölümün başında ilgili slayt numaraları yazar:
+1. **Aşağı inme:** görüntü seviye seviye bulanıklaştırılıp yarıya küçültülür. Her seviyede Gauss görüntüsü, bir küçüğünün büyütülmüş hâli ve aradaki fark (Laplacian) yan yana görünür. Ne kadar aşağı inileceği üstteki “En küçük seviye” ayarıyla seçilir (1×1'e kadar).
+2. **Geri inşa:** en küçük seviyeden başlayıp adım adım büyütülür ve saklanan ayrıntı eklenir. Sonunda orijinalle karşılaştırılır (birebir aynı).
+3. **Görüntü harmanlama:** elma/portakal ve diğer hazır fotoğraflar, görsel yükleme ve sürükle-bırak, fırçayla maske çizme, doğrudan kesme / tek Gauss / Laplacian karşılaştırması, sonucu PNG indirme.
 
-1. **Şablon eşleme** (slayt 3–10, 25–26): SSD ve NCC; sabit boyutlu şablonla piramidin her seviyesinde arama, farklı boyuttaki gözleri bulma
-2. **Örnekleme** (slayt 14): Gauss ile süzüp seyreltme ve süzmeden seyreltmenin yol açtığı örtüşme
-3. **Gauss piramidi** (slayt 13–18): REDUCE, 1B düğüm diyagramı, seviyeler aynı boyutta ve gerçek boyutta
-4. **Matris gösterimi** (slayt 19–25): `G₁`, `G₂`, `G₂G₁` matrisleri, eşdeğer ağırlık fonksiyonları, 1B piramit matrisi
-5. **Laplacian piramidi adım adım** (slayt 27–35): `x₁ → G₁x₁ → F₁G₁x₁ → L₁ = (I − F₁G₁)x₁ …` animasyonu
-6. **Yukarı örnekleme** (slayt 36): araya sıfır ekleme ve süzme, `F₃` matrisi
-7. **Frekans bantları** (slayt 37, 40–42): seviyeler tam çözünürlükte, her seviyenin Fourier spektrumu ve radyal genlik grafiği
-8. **Geri dönüşüm** (slayt 38–39): `x_k = L_k + F_k x_{k+1}` adım adım; hata ölçümü (mükemmel geri çatma)
-9. **Uygulamalar** (slayt 43): seviye kazançları, gürültü giderme, keskinleştirme, nicemleme ile sıkıştırma
-10. **Görüntü harmanlama** (slayt 44–47): gerçek elma/portakal fotoğrafları ve hazır çiftler; A, B ve maske için görsel yükleme ya da sürükle-bırak; fırçayla maske çizme; B'yi ölçekleme/kaydırma; doğrudan kesme, tek Gauss ile yumuşatma ve Laplacian harmanlama karşılaştırması; seviye seviye katkılar; sonucu PNG indirme
-
-Hazır fotoğraflar (`pyramid/img/`, 512×512): elma ve portakal (OpenCV örnek verisi), kameraman, kedi, kahve, tuğla, çim, çakıl (scikit-image, CC0), astronot, Hubble Derin Alan, sikkeler (kamu malı), roket (SpaceX, CC0), Yıldızlı Gece (Van Gogh, kamu malı). Ana görüntü listesinde gri seviyeye çevrilerek de kullanılabilirler.
-
-Ortak ayarlar: görüntü seçimi ya da yükleme, 256/512 boyut, seviye sayısı K, Burt–Adelson çekirdek parametresi `a` (0.375 → [1 4 6 4 1]/16), Laplacian kontrastı. Giriş görüntüsüne çizim yapılabilir; tüm bölümler anında güncellenir.
+Hazır fotoğraflar `pyramid/img/` klasöründedir (OpenCV ve scikit-image örnek verileri, NASA, Van Gogh; CC0 ya da kamu malı).
 
 ## GitHub Pages'te yayınlama
 
